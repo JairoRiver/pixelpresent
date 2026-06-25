@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  dev-up:
+    desc: Start Postgres and Mailpit for local development.
+    cmds:
+      - docker compose -f docker-compose.dev.yml up -d
+
+  dev-down:
+    desc: Stop Postgres and Mailpit for local development.
+    cmds:
+      - docker compose -f docker-compose.dev.yml down
