@@ -1,10 +1,9 @@
 package main
 
 import (
-	"log"
-
 	"github.com/JairoRiver/pixelpresent/cmd/server/migrate"
 	"github.com/JairoRiver/pixelpresent/cmd/server/serve"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +20,6 @@ func newRootCmd() *cobra.Command {
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("server exited with error")
 	}
 }

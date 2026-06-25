@@ -11,6 +11,10 @@ import (
 const DefaultConfigPath = "config.yaml"
 
 type Config struct {
+	Environment string `yaml:"environment"`
+	Log         struct {
+		Level string `yaml:"level"`
+	} `yaml:"log"`
 	Database struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"database"`
