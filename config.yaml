@@ -1,0 +1,2 @@
+database:
+  dsn: ${DATABASE_DSN:-postgres://pixelpresent:pixelpresent@localhost:5432/pixelpresent?sslmode=disable}
