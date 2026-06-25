@@ -1,6 +1,31 @@
 version: "3"
 
 tasks:
+  run:
+    desc: Run the server.
+    cmds:
+      - go run ./cmd/server serve
+
+  test:
+    desc: Run all tests.
+    cmds:
+      - go test ./...
+
+  sqlc-generate:
+    desc: Generate Go code from SQL queries with sqlc.
+    cmds:
+      - sqlc generate
+
+  migrate-up:
+    desc: Apply all pending database migrations.
+    cmds:
+      - go run ./cmd/server migrate up
+
+  migrate-down:
+    desc: Revert database migrations.
+    cmds:
+      - go run ./cmd/server migrate down
+
   dev-up:
     desc: Start Postgres and Mailpit for local development.
     cmds:
