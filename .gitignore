@@ -2,6 +2,10 @@ CLAUDE.md
 pixel_present_arquitectura.md
 pixel_present_tareas.md
 pixel_present.md
+
+### Go ###
+/server
+
 ### Astro ###
 # Gitignore template for Astro projects
 # Ignore content collection generated files
