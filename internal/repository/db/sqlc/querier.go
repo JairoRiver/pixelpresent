@@ -6,11 +6,16 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
+	CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams) (MagicLink, error)
 	CreateUser(ctx context.Context, email string) (User, error)
+	GetMagicLinkByTokenHash(ctx context.Context, tokenHash string) (MagicLink, error)
 	GetUser(ctx context.Context, arg GetUserParams) (User, error)
+	MarkMagicLinkConsumed(ctx context.Context, id uuid.UUID) (MagicLink, error)
 }
 
 var _ Querier = (*Queries)(nil)
