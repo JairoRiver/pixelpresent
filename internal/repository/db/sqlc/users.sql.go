@@ -8,6 +8,7 @@ package sqlc
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -34,8 +35,8 @@ LIMIT 1
 `
 
 type GetUserParams struct {
-	ID    pgtype.UUID `json:"id"`
-	Email pgtype.Text `json:"email"`
+	ID    uuid.NullUUID `json:"id"`
+	Email pgtype.Text   `json:"email"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) {

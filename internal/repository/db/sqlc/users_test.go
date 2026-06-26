@@ -7,6 +7,7 @@ import (
 
 	"github.com/JairoRiver/pixelpresent/internal/repository/db/dbtest"
 	"github.com/JairoRiver/pixelpresent/internal/util"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,8 @@ func createRandomUser(t *testing.T, q *Queries) User {
 	user, err := q.CreateUser(context.Background(), email)
 	require.NoError(t, err)
 	require.Equal(t, email, user.Email)
-	require.True(t, user.ID.Valid)
-	require.True(t, user.CreatedAt.Valid)
+	require.NotEqual(t, uuid.Nil, user.ID)
+	require.False(t, user.CreatedAt.IsZero())
 
 	return user
 }
@@ -40,7 +41,9 @@ func TestGetUser_ByID(t *testing.T) {
 
 	created := createRandomUser(t, q)
 
-	got, err := q.GetUser(context.Background(), GetUserParams{ID: created.ID})
+	got, err := q.GetUser(context.Background(), GetUserParams{
+		ID: uuid.NullUUID{UUID: created.ID, Valid: true},
+	})
 	require.NoError(t, err)
 	require.Equal(t, created.ID, got.ID)
 	require.Equal(t, created.Email, got.Email)
