@@ -1,4 +1,10 @@
 environment: ${APP_ENV:-development}
+app:
+  # Public base URL used to build links sent by email (e.g. magic links).
+  base_url: ${APP_BASE_URL:-http://localhost:8080}
+auth:
+  # How long a login magic link stays valid (Go duration, e.g. 15m, 1h).
+  magic_link_ttl: ${MAGIC_LINK_TTL:-15m}
 log:
   level: ${LOG_LEVEL:-info}
 database:
