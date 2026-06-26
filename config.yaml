@@ -3,3 +3,9 @@ log:
   level: ${LOG_LEVEL:-info}
 database:
   dsn: ${DATABASE_DSN:-postgres://pixelpresent:pixelpresent@localhost:5432/pixelpresent?sslmode=disable}
+email:
+  host: ${SMTP_HOST:-localhost}
+  port: ${SMTP_PORT:-1025}
+  username: ${SMTP_USERNAME:-}
+  password: ${SMTP_PASSWORD:-}
+  from: ${SMTP_FROM:-no-reply@pixelpresent.local}

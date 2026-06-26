@@ -18,6 +18,13 @@ type Config struct {
 	Database struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"database"`
+	Email struct {
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		From     string `yaml:"from"`
+	} `yaml:"email"`
 }
 
 // expandEnv replaces ${VAR} and ${VAR:-default} in s using environment variables.
