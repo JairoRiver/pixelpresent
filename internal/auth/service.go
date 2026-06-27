@@ -81,6 +81,37 @@ func (s *Service) RequestMagicLink(ctx context.Context, email string) error {
 	})
 }
 
+// VerifyMagicLink validates a magic-link token: it looks the link up by hash,
+// rejects it if already consumed or expired, atomically marks it consumed
+// (single-use), and returns the owning user. The returned errors
+// (ErrMagicLinkNotFound, ErrMagicLinkConsumed, ErrMagicLinkExpired) let the
+// caller decide how much to reveal to the end user.
+func (s *Service) VerifyMagicLink(ctx context.Context, token string) (domain.User, error) {
+	link, err := s.links.GetByTokenHash(ctx, hashToken(token))
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if link.ConsumedAt != nil {
+		return domain.User{}, domain.ErrMagicLinkConsumed
+	}
+	if !link.ExpiresAt.After(time.Now()) {
+		return domain.User{}, domain.ErrMagicLinkExpired
+	}
+
+	if _, err := s.links.MarkConsumed(ctx, link.ID); err != nil {
+		// MarkConsumed is the real single-use guard: it only succeeds while the
+		// link is unconsumed. Losing that race means a concurrent verify already
+		// consumed it, so report it as consumed rather than "not found".
+		if errors.Is(err, domain.ErrMagicLinkNotFound) {
+			return domain.User{}, domain.ErrMagicLinkConsumed
+		}
+		return domain.User{}, err
+	}
+
+	return s.users.GetByID(ctx, link.UserID)
+}
+
 func (s *Service) verifyURL(token string) string {
 	return s.baseURL + verifyPath + "?token=" + url.QueryEscape(token)
 }

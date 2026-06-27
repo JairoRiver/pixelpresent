@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/JairoRiver/pixelpresent/internal/domain"
 	"github.com/JairoRiver/pixelpresent/internal/email"
+	"github.com/JairoRiver/pixelpresent/internal/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,4 +93,88 @@ func TestRequestMagicLink_ExistingUserIsReused(t *testing.T) {
 	stored := links.all()
 	require.Len(t, stored, 1)
 	require.Equal(t, existing.ID, stored[0].UserID)
+}
+
+// seedLink creates a user and a magic link for it in the fakes, returning the
+// raw token (only the hash is stored, as in production) and the stored link.
+func seedLink(t *testing.T, users *fakeUserRepo, links *fakeMagicLinkRepo, expiresAt time.Time) (string, domain.MagicLink) {
+	t.Helper()
+
+	user, err := users.Create(context.Background(), util.RandomEmail())
+	require.NoError(t, err)
+
+	token, err := generateToken()
+	require.NoError(t, err)
+
+	link, err := links.Create(context.Background(), user.ID, hashToken(token), expiresAt)
+	require.NoError(t, err)
+
+	return token, link
+}
+
+func TestVerifyMagicLink_Valid(t *testing.T) {
+	users := newFakeUserRepo()
+	links := newFakeMagicLinkRepo()
+	svc := NewService(users, links, email.NewFake(), "https://pixel.example", testTTL)
+
+	token, link := seedLink(t, users, links, time.Now().Add(testTTL))
+
+	user, err := svc.VerifyMagicLink(context.Background(), token)
+	require.NoError(t, err)
+	require.Equal(t, link.UserID, user.ID)
+
+	// The link is now marked consumed.
+	consumed, err := links.GetByTokenHash(context.Background(), hashToken(token))
+	require.NoError(t, err)
+	require.NotNil(t, consumed.ConsumedAt)
+}
+
+func TestVerifyMagicLink_SingleUse(t *testing.T) {
+	users := newFakeUserRepo()
+	links := newFakeMagicLinkRepo()
+	svc := NewService(users, links, email.NewFake(), "https://pixel.example", testTTL)
+
+	token, _ := seedLink(t, users, links, time.Now().Add(testTTL))
+
+	_, err := svc.VerifyMagicLink(context.Background(), token)
+	require.NoError(t, err)
+
+	// A second verification of the same token must fail as already consumed.
+	_, err = svc.VerifyMagicLink(context.Background(), token)
+	require.ErrorIs(t, err, domain.ErrMagicLinkConsumed)
+}
+
+func TestVerifyMagicLink_Expired(t *testing.T) {
+	users := newFakeUserRepo()
+	links := newFakeMagicLinkRepo()
+	svc := NewService(users, links, email.NewFake(), "https://pixel.example", testTTL)
+
+	token, _ := seedLink(t, users, links, time.Now().Add(-time.Minute))
+
+	_, err := svc.VerifyMagicLink(context.Background(), token)
+	require.ErrorIs(t, err, domain.ErrMagicLinkExpired)
+}
+
+func TestVerifyMagicLink_AlreadyConsumed(t *testing.T) {
+	users := newFakeUserRepo()
+	links := newFakeMagicLinkRepo()
+	svc := NewService(users, links, email.NewFake(), "https://pixel.example", testTTL)
+
+	token, link := seedLink(t, users, links, time.Now().Add(testTTL))
+
+	// Consume it out of band, then verify.
+	_, err := links.MarkConsumed(context.Background(), link.ID)
+	require.NoError(t, err)
+
+	_, err = svc.VerifyMagicLink(context.Background(), token)
+	require.ErrorIs(t, err, domain.ErrMagicLinkConsumed)
+}
+
+func TestVerifyMagicLink_NotFound(t *testing.T) {
+	users := newFakeUserRepo()
+	links := newFakeMagicLinkRepo()
+	svc := NewService(users, links, email.NewFake(), "https://pixel.example", testTTL)
+
+	_, err := svc.VerifyMagicLink(context.Background(), "a-token-that-was-never-issued")
+	require.ErrorIs(t, err, domain.ErrMagicLinkNotFound)
 }
