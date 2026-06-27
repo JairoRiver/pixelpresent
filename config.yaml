@@ -5,6 +5,11 @@ app:
 auth:
   # How long a login magic link stays valid (Go duration, e.g. 15m, 1h).
   magic_link_ttl: ${MAGIC_LINK_TTL:-15m}
+  # How long a session cookie stays valid (Go duration). Default 720h = 30 days.
+  session_ttl: ${SESSION_TTL:-720h}
+  # Secret used to sign (HMAC-SHA256) session cookies. Set via env in production
+  # (systemd); the dev default below is NOT safe for production.
+  session_secret: ${SESSION_SECRET:-dev-insecure-session-secret-change-me}
 log:
   level: ${LOG_LEVEL:-info}
 database:

@@ -16,7 +16,9 @@ type Config struct {
 		BaseURL string `yaml:"base_url"`
 	} `yaml:"app"`
 	Auth struct {
-		MagicLinkTTL string `yaml:"magic_link_ttl"`
+		MagicLinkTTL  string `yaml:"magic_link_ttl"`
+		SessionTTL    string `yaml:"session_ttl"`
+		SessionSecret string `yaml:"session_secret"`
 	} `yaml:"auth"`
 	Log struct {
 		Level string `yaml:"level"`
