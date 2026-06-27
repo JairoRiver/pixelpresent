@@ -9,6 +9,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// dashboardPath is the frontend route a logged-in creator lands on after a
+	// successful verification (a Fase 4 Astro route, same origin).
+	dashboardPath = "/dashboard"
+	// authErrorLocation is where verification failures redirect: the app root
+	// with an error marker the frontend surfaces. We do not distinguish invalid,
+	// expired, consumed, or unknown tokens.
+	authErrorLocation = "/?auth_error=invalid_or_expired_link"
+)
+
 type requestMagicLinkBody struct {
 	Email string `json:"email"`
 }
@@ -39,4 +49,27 @@ func (s *Server) handleRequestMagicLink(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleVerify handles GET /auth/verify?token=. On a valid token it consumes the
+// link, sets the session cookie, and redirects to the dashboard; on any failure
+// it redirects to the auth-error page without revealing the cause.
+func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Redirect(w, r, authErrorLocation, http.StatusSeeOther)
+		return
+	}
+
+	user, err := s.auth.VerifyMagicLink(r.Context(), token)
+	if err != nil {
+		// Invalid, expired, already consumed, or unknown: all look the same to
+		// the visitor. Logged at info because it is an expected user-facing case.
+		log.Info().Err(err).Msg("magic link verification rejected")
+		http.Redirect(w, r, authErrorLocation, http.StatusSeeOther)
+		return
+	}
+
+	s.sessions.SetCookie(w, user.ID)
+	http.Redirect(w, r, dashboardPath, http.StatusSeeOther)
 }

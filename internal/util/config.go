@@ -15,6 +15,9 @@ type Config struct {
 	App         struct {
 		BaseURL string `yaml:"base_url"`
 	} `yaml:"app"`
+	Server struct {
+		Addr string `yaml:"addr"`
+	} `yaml:"server"`
 	Auth struct {
 		MagicLinkTTL  string `yaml:"magic_link_ttl"`
 		SessionTTL    string `yaml:"session_ttl"`

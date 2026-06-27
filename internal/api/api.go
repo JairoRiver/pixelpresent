@@ -8,22 +8,33 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+
+	"github.com/JairoRiver/pixelpresent/internal/domain"
 )
 
-// MagicLinkRequester is the slice of the auth service the API needs to request a
-// login link. *auth.Service satisfies it.
-type MagicLinkRequester interface {
+// AuthService is the slice of the auth service the API depends on. *auth.Service
+// satisfies it.
+type AuthService interface {
 	RequestMagicLink(ctx context.Context, email string) error
+	VerifyMagicLink(ctx context.Context, token string) (domain.User, error)
+}
+
+// SessionWriter issues the session cookie after a successful verification.
+// *auth.SessionManager satisfies it.
+type SessionWriter interface {
+	SetCookie(w http.ResponseWriter, userID uuid.UUID)
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
 type Server struct {
-	auth MagicLinkRequester
+	auth     AuthService
+	sessions SessionWriter
 }
 
 // NewServer builds the API server over its service dependencies.
-func NewServer(auth MagicLinkRequester) *Server {
-	return &Server{auth: auth}
+func NewServer(auth AuthService, sessions SessionWriter) *Server {
+	return &Server{auth: auth, sessions: sessions}
 }
 
 // Routes builds the chi router with every route mounted.
@@ -34,6 +45,7 @@ func (s *Server) Routes() http.Handler {
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/magic-link", s.handleRequestMagicLink)
+		r.Get("/verify", s.handleVerify)
 	})
 
 	return r
