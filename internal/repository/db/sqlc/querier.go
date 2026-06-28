@@ -11,11 +11,21 @@ import (
 )
 
 type Querier interface {
+	CreateGift(ctx context.Context, arg CreateGiftParams) (Gift, error)
 	CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams) (MagicLink, error)
 	CreateUser(ctx context.Context, email string) (User, error)
+	GetGiftByID(ctx context.Context, id uuid.UUID) (Gift, error)
+	GetGiftByViewToken(ctx context.Context, viewToken string) (Gift, error)
 	GetMagicLinkByTokenHash(ctx context.Context, tokenHash string) (MagicLink, error)
 	GetUser(ctx context.Context, arg GetUserParams) (User, error)
+	GiftViewTokenExists(ctx context.Context, viewToken string) (bool, error)
+	ListGiftsByUser(ctx context.Context, creatorID uuid.UUID) ([]Gift, error)
 	MarkMagicLinkConsumed(ctx context.Context, id uuid.UUID) (MagicLink, error)
+	// Full-replace of the creator-editable fields (the editor holds the whole gift
+	// state): passing NULL clears a nullable field. view_token, creator_id and
+	// created_at are immutable; updated_at is bumped. Ownership is enforced in the
+	// service, not here.
+	UpdateGift(ctx context.Context, arg UpdateGiftParams) (Gift, error)
 }
 
 var _ Querier = (*Queries)(nil)

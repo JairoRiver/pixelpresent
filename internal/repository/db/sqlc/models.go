@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Gift struct {
+	ID              uuid.UUID          `json:"id"`
+	CreatorID       uuid.UUID          `json:"creator_id"`
+	Title           string             `json:"title"`
+	Message         string             `json:"message"`
+	PixelArt        []byte             `json:"pixel_art"`
+	RevealType      string             `json:"reveal_type"`
+	RevealConfig    []byte             `json:"reveal_config"`
+	ViewToken       string             `json:"view_token"`
+	RecipientEmail  pgtype.Text        `json:"recipient_email"`
+	ScheduledOpenAt pgtype.Timestamptz `json:"scheduled_open_at"`
+	ScheduledSendAt pgtype.Timestamptz `json:"scheduled_send_at"`
+	SentAt          pgtype.Timestamptz `json:"sent_at"`
+	SingleOpen      bool               `json:"single_open"`
+	OpenedAt        pgtype.Timestamptz `json:"opened_at"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+}
+
 type MagicLink struct {
 	ID         uuid.UUID          `json:"id"`
 	UserID     uuid.UUID          `json:"user_id"`
