@@ -21,4 +21,10 @@ var (
 	// ErrDuplicateViewToken is returned when creating a gift whose view token
 	// already exists (the unique constraint backstops the generator).
 	ErrDuplicateViewToken = errors.New("view token already exists")
+	// ErrGiftNotVisible is returned when an action requires a gift to be currently
+	// viewable (passed the visibility gate) but it is not.
+	ErrGiftNotVisible = errors.New("gift not visible")
+	// ErrReactionInvalid is returned when a reaction payload is malformed (unknown
+	// kind, or empty/oversized content for its kind).
+	ErrReactionInvalid = errors.New("reaction invalid")
 )

@@ -44,7 +44,7 @@ func (f *fakeAuth) VerifyMagicLink(_ context.Context, token string) (domain.User
 // exercised end to end. The gift service is nil: auth tests do not hit /gifts.
 func newTestServer(svc AuthService) *Server {
 	sessions := auth.NewSessionManager("test-secret", false, 30*24*time.Hour)
-	return NewServer(svc, sessions, nil)
+	return NewServer(svc, sessions, nil, nil)
 }
 
 func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {

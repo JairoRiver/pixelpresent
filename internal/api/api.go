@@ -12,6 +12,7 @@ import (
 
 	"github.com/JairoRiver/pixelpresent/internal/domain"
 	"github.com/JairoRiver/pixelpresent/internal/gifts"
+	"github.com/JairoRiver/pixelpresent/internal/reactions"
 )
 
 // AuthService is the slice of the auth service the API depends on. *auth.Service
@@ -39,16 +40,23 @@ type GiftService interface {
 	GetByViewToken(ctx context.Context, token string) (domain.Gift, error)
 }
 
+// ReactionService is the slice of the reaction service the API depends on.
+// *reactions.Service satisfies it.
+type ReactionService interface {
+	Create(ctx context.Context, in reactions.CreateInput) (domain.Reaction, error)
+}
+
 // Server holds the dependencies of the HTTP handlers and builds the router.
 type Server struct {
-	auth     AuthService
-	sessions Sessions
-	gifts    GiftService
+	auth      AuthService
+	sessions  Sessions
+	gifts     GiftService
+	reactions ReactionService
 }
 
 // NewServer builds the API server over its service dependencies.
-func NewServer(auth AuthService, sessions Sessions, gifts GiftService) *Server {
-	return &Server{auth: auth, sessions: sessions, gifts: gifts}
+func NewServer(auth AuthService, sessions Sessions, gifts GiftService, reactions ReactionService) *Server {
+	return &Server{auth: auth, sessions: sessions, gifts: gifts, reactions: reactions}
 }
 
 // Routes builds the chi router with every route mounted.
@@ -62,8 +70,9 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/verify", s.handleVerify)
 	})
 
-	// Public recipient-facing view of a gift by its shareable token (no session).
+	// Public recipient-facing routes addressed by the shareable token (no session).
 	r.Get("/g/{view_token}", s.handleViewGift)
+	r.Post("/g/{view_token}/reactions", s.handleCreateReaction)
 
 	// Routes requiring an authenticated creator session.
 	r.Group(func(r chi.Router) {

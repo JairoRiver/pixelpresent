@@ -12,6 +12,7 @@ import (
 	"github.com/JairoRiver/pixelpresent/internal/auth"
 	"github.com/JairoRiver/pixelpresent/internal/email"
 	"github.com/JairoRiver/pixelpresent/internal/gifts"
+	"github.com/JairoRiver/pixelpresent/internal/reactions"
 	"github.com/JairoRiver/pixelpresent/internal/repository"
 	"github.com/JairoRiver/pixelpresent/internal/repository/db"
 	"github.com/JairoRiver/pixelpresent/internal/util"
@@ -72,6 +73,7 @@ func run(config util.Config) error {
 	users := repository.NewUserRepo(pool)
 	links := repository.NewMagicLinkRepo(pool)
 	giftRepo := repository.NewGiftRepo(pool)
+	reactionRepo := repository.NewReactionRepo(pool)
 	emailSender := email.NewSMTPSender(email.SMTPConfig{
 		Host:     config.Email.Host,
 		Port:     config.Email.Port,
@@ -83,7 +85,8 @@ func run(config util.Config) error {
 	authService := auth.NewService(users, links, emailSender, config.App.BaseURL, magicLinkTTL)
 	sessions := auth.NewSessionManager(config.Auth.SessionSecret, config.Environment == "production", sessionTTL)
 	giftService := gifts.NewService(giftRepo)
-	apiServer := api.NewServer(authService, sessions, giftService)
+	reactionService := reactions.NewService(giftRepo, reactionRepo)
+	apiServer := api.NewServer(authService, sessions, giftService, reactionService)
 
 	srv := &http.Server{
 		Addr:              config.Server.Addr,

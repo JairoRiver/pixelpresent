@@ -16,7 +16,7 @@ import (
 // viewGift sends the public GET /g/{token} (no session).
 func viewGift(t *testing.T, gift GiftService, token string) *httptest.ResponseRecorder {
 	t.Helper()
-	srv := NewServer(nil, giftSessions(), gift)
+	srv := NewServer(nil, giftSessions(), gift, nil)
 	req := httptest.NewRequest(http.MethodGet, "/g/"+token, nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
