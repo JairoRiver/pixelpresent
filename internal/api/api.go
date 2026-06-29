@@ -53,6 +53,9 @@ type Server struct {
 	sessions  Sessions
 	gifts     GiftService
 	reactions ReactionService
+
+	// docsEnabled mounts the OpenAPI docs routes; set via EnableDocs (dev only).
+	docsEnabled bool
 }
 
 // NewServer builds the API server over its service dependencies.
@@ -85,6 +88,12 @@ func (s *Server) Routes() http.Handler {
 		r.Delete("/gifts/{id}", s.handleDeleteGift)
 		r.Get("/gifts/{id}/reactions", s.handleListReactions)
 	})
+
+	// Development-only API docs, mounted only when explicitly enabled.
+	if s.docsEnabled {
+		r.Get("/docs", s.handleDocsUI)
+		r.Get("/docs/openapi.yaml", s.handleOpenAPISpec)
+	}
 
 	return r
 }

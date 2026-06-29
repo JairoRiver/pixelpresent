@@ -87,6 +87,10 @@ func run(config util.Config) error {
 	giftService := gifts.NewService(giftRepo)
 	reactionService := reactions.NewService(giftRepo, reactionRepo)
 	apiServer := api.NewServer(authService, sessions, giftService, reactionService)
+	// API docs are a development affordance: never mounted in production.
+	if config.Environment != "production" {
+		apiServer.EnableDocs()
+	}
 
 	srv := &http.Server{
 		Addr:              config.Server.Addr,

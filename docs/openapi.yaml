@@ -1,0 +1,470 @@
+openapi: 3.1.0
+info:
+  title: Pixel Present API
+  version: 0.1.0
+  description: |
+    HTTP API of Pixel Present: magic-link authentication, gift CRUD for creators,
+    a public recipient-facing view addressed by an opaque view token, and
+    reactions on a gift.
+
+    **Errors** use a single envelope: `{"error":{"code","message"}}`. Clients key
+    off the stable `code`; `message` is a human-readable hint.
+
+    **Auth** is a session cookie (`pp_session`) set by `GET /auth/verify` after a
+    valid magic link. Protected endpoints require it.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: auth
+    description: Magic-link authentication
+  - name: gifts
+    description: Creator-owned gift management (requires a session)
+  - name: public
+    description: Recipient-facing endpoints addressed by an opaque view token
+
+paths:
+  /auth/magic-link:
+    post:
+      tags: [auth]
+      operationId: requestMagicLink
+      security: []
+      summary: Request a magic link
+      description: |
+        Sends a one-time login link to the email. Always responds 202 for a
+        syntactically valid address, whether or not it has an account, so the
+        endpoint cannot be used to enumerate users.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alguien@example.com
+      responses:
+        "202":
+          description: Accepted; if the address is valid an email was sent.
+        "400":
+          description: Malformed body or invalid email.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/verify:
+    get:
+      tags: [auth]
+      operationId: verifyMagicLink
+      security: []
+      summary: Verify a magic link and start a session
+      description: |
+        Consumes the token, sets the `pp_session` cookie and redirects (303) to
+        the dashboard. Any failure (invalid, expired, consumed, unknown) redirects
+        to the auth-error page without revealing the cause. Indistinguishable
+        outcomes by design.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "303":
+          description: |
+            Redirect. On success sets `pp_session` and points to the dashboard; on
+            failure points to the auth-error page.
+          headers:
+            Set-Cookie:
+              description: The `pp_session` cookie, only on success.
+              schema: { type: string }
+            Location:
+              schema: { type: string }
+
+  /g/{view_token}:
+    get:
+      tags: [public]
+      operationId: viewGift
+      security: []
+      summary: View a gift by its public token
+      description: |
+        Applies the visibility gate and returns 200 with a `state` discriminator.
+        The gift payload is present only when `state` is `visible`;
+        `scheduled_open_at` is present only when `not_yet_open`. Only an unknown
+        token yields 404. This endpoint never marks the gift opened.
+      parameters:
+        - $ref: "#/components/parameters/ViewToken"
+      responses:
+        "200":
+          description: The gift's current visibility state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicGiftResponse" }
+        "404":
+          description: No gift matches the token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /g/{view_token}/reactions:
+    post:
+      tags: [public]
+      operationId: createReaction
+      security: []
+      summary: React to a gift
+      description: |
+        Registers an emoji or text reaction on a currently-visible gift. No
+        session required. Voice reactions are not accepted here (post-MVP).
+      parameters:
+        - $ref: "#/components/parameters/ViewToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReactionWrite" }
+      responses:
+        "201":
+          description: The created reaction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reaction" }
+        "400":
+          description: Malformed body or invalid reaction payload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No gift matches the token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The gift exists but is not currently visible.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /gifts:
+    post:
+      tags: [gifts]
+      operationId: createGift
+      summary: Create a gift
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftWrite" }
+      responses:
+        "201":
+          description: Created; returns the id and the shareable view token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, view_token]
+                properties:
+                  id: { type: string, format: uuid }
+                  view_token: { type: string }
+        "400":
+          description: Invalid gift payload (title, reveal_type, pixel_art, email).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    get:
+      tags: [gifts]
+      operationId: listGifts
+      summary: List the creator's gifts
+      description: Lightweight summaries (newest first) for the dashboard.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The session user's gifts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [gifts]
+                properties:
+                  gifts:
+                    type: array
+                    items: { $ref: "#/components/schemas/GiftSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /gifts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/GiftID"
+    get:
+      tags: [gifts]
+      operationId: getGift
+      summary: Get a gift
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The gift, only for its creator.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gift" }
+        "400": { $ref: "#/components/responses/InvalidID" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/GiftNotFound" }
+    put:
+      tags: [gifts]
+      operationId: updateGift
+      summary: Replace a gift
+      description: Full-replace of the editable fields; passing null clears a nullable.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GiftWrite" }
+      responses:
+        "200":
+          description: The updated gift.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gift" }
+        "400":
+          description: Invalid id or invalid gift payload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/GiftNotFound" }
+    delete:
+      tags: [gifts]
+      operationId: deleteGift
+      summary: Delete a gift
+      description: Hard delete; media and reactions cascade.
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Deleted.
+        "400": { $ref: "#/components/responses/InvalidID" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/GiftNotFound" }
+
+  /gifts/{id}/reactions:
+    get:
+      tags: [gifts]
+      operationId: listGiftReactions
+      summary: List a gift's reactions
+      description: Oldest first; only for the gift's creator.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GiftID"
+      responses:
+        "200":
+          description: The gift's reactions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Reaction" }
+        "400": { $ref: "#/components/responses/InvalidID" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/GiftNotFound" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: pp_session
+
+  parameters:
+    ViewToken:
+      name: view_token
+      in: path
+      required: true
+      description: Opaque shareable token of the gift.
+      schema: { type: string }
+    GiftID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The gift belongs to another user.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    GiftNotFound:
+      description: No such gift.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidID:
+      description: The id is not a valid UUID.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code.
+              examples: [gift_not_found, gift_not_visible, invalid_reaction, forbidden, unauthorized]
+            message:
+              type: string
+              description: Human-readable hint.
+
+    RevealType:
+      type: string
+      enum: [box, envelope, scratch, puzzle, confetti, cake, arcade]
+
+    GiftWrite:
+      type: object
+      required: [title, pixel_art, reveal_type]
+      properties:
+        title: { type: string }
+        message: { type: string, default: "" }
+        pixel_art:
+          description: "Pixel grid: { width, height, palette, pixels }."
+          type: object
+          additionalProperties: true
+        reveal_type: { $ref: "#/components/schemas/RevealType" }
+        reveal_config:
+          type: object
+          additionalProperties: true
+        recipient_email:
+          type: [string, "null"]
+          format: email
+        scheduled_open_at: { type: [string, "null"], format: date-time }
+        scheduled_send_at: { type: [string, "null"], format: date-time }
+        single_open: { type: boolean, default: false }
+        expires_at: { type: [string, "null"], format: date-time }
+
+    Gift:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        creator_id: { type: string, format: uuid }
+        title: { type: string }
+        message: { type: string }
+        pixel_art: { type: object, additionalProperties: true }
+        reveal_type: { $ref: "#/components/schemas/RevealType" }
+        reveal_config: { type: object, additionalProperties: true }
+        view_token: { type: string }
+        recipient_email: { type: string, format: email }
+        scheduled_open_at: { type: string, format: date-time }
+        scheduled_send_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+        single_open: { type: boolean }
+        opened_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    GiftSummary:
+      description: Lighter list shape; drops message and reveal_config but keeps pixel_art for thumbnails.
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        pixel_art: { type: object, additionalProperties: true }
+        reveal_type: { $ref: "#/components/schemas/RevealType" }
+        view_token: { type: string }
+        recipient_email: { type: string, format: email }
+        scheduled_open_at: { type: string, format: date-time }
+        scheduled_send_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+        single_open: { type: boolean }
+        opened_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PublicGiftResponse:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [visible, not_yet_open, expired, already_opened]
+        gift:
+          description: Present only when state is `visible`.
+          $ref: "#/components/schemas/PublicGift"
+        scheduled_open_at:
+          description: Present only when state is `not_yet_open`.
+          type: string
+          format: date-time
+
+    PublicGift:
+      description: Recipient-facing payload; never exposes token, creator or recipient.
+      type: object
+      properties:
+        title: { type: string }
+        message: { type: string }
+        pixel_art: { type: object, additionalProperties: true }
+        reveal_type: { $ref: "#/components/schemas/RevealType" }
+        reveal_config: { type: object, additionalProperties: true }
+
+    ReactionWrite:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [emoji, text]
+        emoji:
+          description: Required when kind is `emoji`.
+          type: string
+        message:
+          description: Required when kind is `text`.
+          type: string
+
+    Reaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [emoji, text, voice]
+        emoji: { type: string }
+        message: { type: string }
+        created_at: { type: string, format: date-time }
