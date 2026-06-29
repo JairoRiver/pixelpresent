@@ -194,6 +194,24 @@ func TestGiftRepo_ListByUser_Empty(t *testing.T) {
 	require.Empty(t, gifts)
 }
 
+func TestGiftRepo_Delete(t *testing.T) {
+	tx := dbtest.Tx(t)
+	repo := NewGiftRepo(tx)
+	created := createTestGift(t, tx)
+
+	require.NoError(t, repo.Delete(context.Background(), created.ID))
+
+	_, err := repo.GetByID(context.Background(), created.ID)
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
+func TestGiftRepo_Delete_NotFound(t *testing.T) {
+	tx := dbtest.Tx(t)
+
+	err := NewGiftRepo(tx).Delete(context.Background(), uuid.New())
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
 func TestGiftRepo_ViewTokenExists(t *testing.T) {
 	tx := dbtest.Tx(t)
 	created := createTestGift(t, tx)

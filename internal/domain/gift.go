@@ -38,6 +38,9 @@ type GiftRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (Gift, error)
 	GetByViewToken(ctx context.Context, token string) (Gift, error)
 	Update(ctx context.Context, g Gift) (Gift, error)
+	// Delete removes the gift with id (media and reactions cascade). It returns
+	// ErrGiftNotFound if no gift had that id.
+	Delete(ctx context.Context, id uuid.UUID) error
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]Gift, error)
 	// ViewTokenExists reports whether a view token is already taken; it backs the
 	// uniqueness check of the view-token generator (gifts.ViewTokenChecker).

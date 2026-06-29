@@ -90,3 +90,57 @@ func (s *Service) GetOwned(ctx context.Context, id, ownerID uuid.UUID) (domain.G
 	}
 	return gift, nil
 }
+
+// UpdateInput carries the creator-editable fields of a gift. id, creator,
+// view_token and the lifecycle timestamps (sent_at, opened_at, created_at) are
+// not editable.
+type UpdateInput struct {
+	Title           string
+	Message         string
+	PixelArt        json.RawMessage
+	RevealType      string
+	RevealConfig    json.RawMessage
+	RecipientEmail  *string
+	ScheduledOpenAt *time.Time
+	ScheduledSendAt *time.Time
+	SingleOpen      bool
+	ExpiresAt       *time.Time
+}
+
+// UpdateOwned full-replaces the editable fields of the gift with id, only if
+// ownerID is its creator. Same error contract as GetOwned.
+func (s *Service) UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in UpdateInput) (domain.Gift, error) {
+	gift, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return domain.Gift{}, err
+	}
+	if gift.CreatorID != ownerID {
+		return domain.Gift{}, domain.ErrGiftForbidden
+	}
+
+	gift.Title = in.Title
+	gift.Message = in.Message
+	gift.PixelArt = in.PixelArt
+	gift.RevealType = in.RevealType
+	gift.RevealConfig = in.RevealConfig
+	gift.RecipientEmail = in.RecipientEmail
+	gift.ScheduledOpenAt = in.ScheduledOpenAt
+	gift.ScheduledSendAt = in.ScheduledSendAt
+	gift.SingleOpen = in.SingleOpen
+	gift.ExpiresAt = in.ExpiresAt
+
+	return s.repo.Update(ctx, gift)
+}
+
+// DeleteOwned removes the gift with id, only if ownerID is its creator. Same
+// error contract as GetOwned.
+func (s *Service) DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error {
+	gift, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if gift.CreatorID != ownerID {
+		return domain.ErrGiftForbidden
+	}
+	return s.repo.Delete(ctx, id)
+}

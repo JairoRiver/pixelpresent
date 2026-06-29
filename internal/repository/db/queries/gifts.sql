@@ -49,3 +49,9 @@ RETURNING *;
 SELECT * FROM gifts
 WHERE creator_id = $1
 ORDER BY created_at DESC;
+
+-- name: DeleteGift :execrows
+-- Hard delete; media and reactions rows cascade via their FKs. Returns the
+-- number of rows deleted so the caller can tell "not found" from "deleted".
+DELETE FROM gifts
+WHERE id = $1;

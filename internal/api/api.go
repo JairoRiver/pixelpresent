@@ -33,6 +33,8 @@ type Sessions interface {
 type GiftService interface {
 	Create(ctx context.Context, in gifts.CreateInput) (domain.Gift, error)
 	GetOwned(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error)
+	UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in gifts.UpdateInput) (domain.Gift, error)
+	DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
@@ -63,6 +65,8 @@ func (s *Server) Routes() http.Handler {
 		r.Use(s.sessions.RequireSession)
 		r.Post("/gifts", s.handleCreateGift)
 		r.Get("/gifts/{id}", s.handleGetGift)
+		r.Put("/gifts/{id}", s.handleUpdateGift)
+		r.Delete("/gifts/{id}", s.handleDeleteGift)
 	})
 
 	return r

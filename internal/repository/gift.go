@@ -81,6 +81,17 @@ func (r *GiftRepo) Update(ctx context.Context, g domain.Gift) (domain.Gift, erro
 	return mapGetGift(updated, err)
 }
 
+func (r *GiftRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	rows, err := r.q.DeleteGift(ctx, id)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrGiftNotFound
+	}
+	return nil
+}
+
 func (r *GiftRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Gift, error) {
 	rows, err := r.q.ListGiftsByUser(ctx, userID)
 	if err != nil {

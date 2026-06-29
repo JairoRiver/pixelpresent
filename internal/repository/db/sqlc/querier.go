@@ -14,6 +14,9 @@ type Querier interface {
 	CreateGift(ctx context.Context, arg CreateGiftParams) (Gift, error)
 	CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams) (MagicLink, error)
 	CreateUser(ctx context.Context, email string) (User, error)
+	// Hard delete; media and reactions rows cascade via their FKs. Returns the
+	// number of rows deleted so the caller can tell "not found" from "deleted".
+	DeleteGift(ctx context.Context, id uuid.UUID) (int64, error)
 	GetGiftByID(ctx context.Context, id uuid.UUID) (Gift, error)
 	GetGiftByViewToken(ctx context.Context, viewToken string) (Gift, error)
 	GetMagicLinkByTokenHash(ctx context.Context, tokenHash string) (MagicLink, error)

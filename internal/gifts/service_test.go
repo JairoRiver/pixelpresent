@@ -57,6 +57,14 @@ func (f *fakeGiftRepo) Update(_ context.Context, g domain.Gift) (domain.Gift, er
 	return g, nil
 }
 
+func (f *fakeGiftRepo) Delete(_ context.Context, id uuid.UUID) error {
+	if _, ok := f.byID[id]; !ok {
+		return domain.ErrGiftNotFound
+	}
+	delete(f.byID, id)
+	return nil
+}
+
 func (f *fakeGiftRepo) ListByUser(_ context.Context, userID uuid.UUID) ([]domain.Gift, error) {
 	out := []domain.Gift{}
 	for _, g := range f.byID {
@@ -131,5 +139,115 @@ func TestService_GetOwned_NotFound(t *testing.T) {
 	svc := NewService(newFakeGiftRepo())
 
 	_, err := svc.GetOwned(context.Background(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
+func TestService_UpdateOwned_Own(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+	creator := uuid.New()
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  creator,
+		Title:      "Original",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateOwned(context.Background(), created.ID, creator, UpdateInput{
+		Title:      "Editado",
+		RevealType: "scratch",
+		PixelArt:   json.RawMessage(`{"v":1}`),
+		SingleOpen: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Editado", updated.Title)
+	require.Equal(t, "scratch", updated.RevealType)
+	require.True(t, updated.SingleOpen)
+	// Immutable fields survive the edit.
+	require.Equal(t, created.ID, updated.ID)
+	require.Equal(t, creator, updated.CreatorID)
+	require.Equal(t, created.ViewToken, updated.ViewToken)
+}
+
+func TestService_UpdateOwned_Foreign(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Ajeno",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateOwned(context.Background(), created.ID, uuid.New(), UpdateInput{
+		Title:      "Hackeado",
+		RevealType: "box",
+		PixelArt:   json.RawMessage(`{}`),
+	})
+	require.ErrorIs(t, err, domain.ErrGiftForbidden)
+
+	// The gift was not modified.
+	unchanged, err := repo.GetByID(context.Background(), created.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Ajeno", unchanged.Title)
+}
+
+func TestService_UpdateOwned_NotFound(t *testing.T) {
+	svc := NewService(newFakeGiftRepo())
+
+	_, err := svc.UpdateOwned(context.Background(), uuid.New(), uuid.New(), UpdateInput{
+		Title:      "x",
+		RevealType: "box",
+		PixelArt:   json.RawMessage(`{}`),
+	})
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
+func TestService_DeleteOwned_Own(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+	creator := uuid.New()
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  creator,
+		Title:      "Borrable",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.DeleteOwned(context.Background(), created.ID, creator))
+
+	_, err = repo.GetByID(context.Background(), created.ID)
+	require.ErrorIs(t, err, domain.ErrGiftNotFound, "the gift is gone")
+}
+
+func TestService_DeleteOwned_Foreign(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Ajeno",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	err = svc.DeleteOwned(context.Background(), created.ID, uuid.New())
+	require.ErrorIs(t, err, domain.ErrGiftForbidden)
+
+	_, err = repo.GetByID(context.Background(), created.ID)
+	require.NoError(t, err, "a foreign delete must not remove the gift")
+}
+
+func TestService_DeleteOwned_NotFound(t *testing.T) {
+	svc := NewService(newFakeGiftRepo())
+
+	err := svc.DeleteOwned(context.Background(), uuid.New(), uuid.New())
 	require.ErrorIs(t, err, domain.ErrGiftNotFound)
 }

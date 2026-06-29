@@ -31,6 +31,14 @@ type fakeGiftService struct {
 	gotOwner uuid.UUID
 	getOut   domain.Gift
 	getErr   error
+
+	updateCalls int
+	gotUpdate   gifts.UpdateInput
+	updateOut   domain.Gift
+	updateErr   error
+
+	deleteCalls int
+	deleteErr   error
 }
 
 func (f *fakeGiftService) Create(_ context.Context, in gifts.CreateInput) (domain.Gift, error) {
@@ -44,6 +52,21 @@ func (f *fakeGiftService) GetOwned(_ context.Context, id, ownerID uuid.UUID) (do
 	f.gotID = id
 	f.gotOwner = ownerID
 	return f.getOut, f.getErr
+}
+
+func (f *fakeGiftService) UpdateOwned(_ context.Context, id, ownerID uuid.UUID, in gifts.UpdateInput) (domain.Gift, error) {
+	f.updateCalls++
+	f.gotID = id
+	f.gotOwner = ownerID
+	f.gotUpdate = in
+	return f.updateOut, f.updateErr
+}
+
+func (f *fakeGiftService) DeleteOwned(_ context.Context, id, ownerID uuid.UUID) error {
+	f.deleteCalls++
+	f.gotID = id
+	f.gotOwner = ownerID
+	return f.deleteErr
 }
 
 const giftTestSecret = "gift-secret"
@@ -245,4 +268,166 @@ func TestGetGift_InvalidID(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
 	require.Zero(t, fake.getCalls, "the service must not run on a malformed id")
+}
+
+// --- PUT /gifts/{id} ---
+
+// putGift sends PUT /gifts/{id} with a valid session cookie for userID.
+func putGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, userID uuid.UUID, id, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, sessions, gift)
+
+	issue := httptest.NewRecorder()
+	sessions.SetCookie(issue, userID)
+
+	req := httptest.NewRequest(http.MethodPut, "/gifts/"+id, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(issue.Result().Cookies()[0])
+
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestUpdateGift_RequiresSession(t *testing.T) {
+	fake := &fakeGiftService{}
+	srv := NewServer(nil, giftSessions(), fake)
+
+	req := httptest.NewRequest(http.MethodPut, "/gifts/"+uuid.NewString(), strings.NewReader(validGiftBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, fake.updateCalls)
+}
+
+func TestUpdateGift_Own(t *testing.T) {
+	userID := uuid.New()
+	giftID := uuid.New()
+	fake := &fakeGiftService{updateOut: domain.Gift{
+		ID:        giftID,
+		CreatorID: userID,
+		Title:     "Feliz cumple",
+		ViewToken: "tok-keep",
+	}}
+
+	rec := putGift(t, fake, giftSessions(), userID, giftID.String(), validGiftBody)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, fake.updateCalls)
+	require.Equal(t, giftID, fake.gotID)
+	require.Equal(t, userID, fake.gotOwner)
+	require.Equal(t, "Feliz cumple", fake.gotUpdate.Title)
+	require.True(t, fake.gotUpdate.SingleOpen)
+
+	var resp giftResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, giftID, resp.ID)
+	require.Equal(t, "tok-keep", resp.ViewToken)
+}
+
+func TestUpdateGift_Foreign(t *testing.T) {
+	fake := &fakeGiftService{updateErr: domain.ErrGiftForbidden}
+	rec := putGift(t, fake, giftSessions(), uuid.New(), uuid.NewString(), validGiftBody)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, codeForbidden, decodeErrorCode(t, rec))
+}
+
+func TestUpdateGift_NotFound(t *testing.T) {
+	fake := &fakeGiftService{updateErr: domain.ErrGiftNotFound}
+	rec := putGift(t, fake, giftSessions(), uuid.New(), uuid.NewString(), validGiftBody)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
+}
+
+func TestUpdateGift_InvalidID(t *testing.T) {
+	fake := &fakeGiftService{}
+	rec := putGift(t, fake, giftSessions(), uuid.New(), "not-a-uuid", validGiftBody)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
+	require.Zero(t, fake.updateCalls)
+}
+
+func TestUpdateGift_InvalidBody(t *testing.T) {
+	fake := &fakeGiftService{}
+	// Invalid reveal_type → 400 before the service runs.
+	body := `{"title":"x","pixel_art":{},"reveal_type":"teleport"}`
+	rec := putGift(t, fake, giftSessions(), uuid.New(), uuid.NewString(), body)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, codeInvalidRevealType, decodeErrorCode(t, rec))
+	require.Zero(t, fake.updateCalls)
+}
+
+// --- DELETE /gifts/{id} ---
+
+// deleteGift sends DELETE /gifts/{id} with a valid session cookie for userID.
+func deleteGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, userID uuid.UUID, id string) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, sessions, gift)
+
+	issue := httptest.NewRecorder()
+	sessions.SetCookie(issue, userID)
+
+	req := httptest.NewRequest(http.MethodDelete, "/gifts/"+id, nil)
+	req.AddCookie(issue.Result().Cookies()[0])
+
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestDeleteGift_RequiresSession(t *testing.T) {
+	fake := &fakeGiftService{}
+	srv := NewServer(nil, giftSessions(), fake)
+
+	req := httptest.NewRequest(http.MethodDelete, "/gifts/"+uuid.NewString(), nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, fake.deleteCalls)
+}
+
+func TestDeleteGift_Own(t *testing.T) {
+	userID := uuid.New()
+	giftID := uuid.New()
+	fake := &fakeGiftService{}
+
+	rec := deleteGift(t, fake, giftSessions(), userID, giftID.String())
+
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	require.Empty(t, rec.Body.String())
+	require.Equal(t, 1, fake.deleteCalls)
+	require.Equal(t, giftID, fake.gotID)
+	require.Equal(t, userID, fake.gotOwner)
+}
+
+func TestDeleteGift_Foreign(t *testing.T) {
+	fake := &fakeGiftService{deleteErr: domain.ErrGiftForbidden}
+	rec := deleteGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, codeForbidden, decodeErrorCode(t, rec))
+}
+
+func TestDeleteGift_NotFound(t *testing.T) {
+	fake := &fakeGiftService{deleteErr: domain.ErrGiftNotFound}
+	rec := deleteGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
+}
+
+func TestDeleteGift_InvalidID(t *testing.T) {
+	fake := &fakeGiftService{}
+	rec := deleteGift(t, fake, giftSessions(), uuid.New(), "not-a-uuid")
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
+	require.Zero(t, fake.deleteCalls)
 }

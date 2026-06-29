@@ -78,6 +78,21 @@ func (q *Queries) CreateGift(ctx context.Context, arg CreateGiftParams) (Gift, e
 	return i, err
 }
 
+const deleteGift = `-- name: DeleteGift :execrows
+DELETE FROM gifts
+WHERE id = $1
+`
+
+// Hard delete; media and reactions rows cascade via their FKs. Returns the
+// number of rows deleted so the caller can tell "not found" from "deleted".
+func (q *Queries) DeleteGift(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteGift, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getGiftByID = `-- name: GetGiftByID :one
 SELECT id, creator_id, title, message, pixel_art, reveal_type, reveal_config, view_token, recipient_email, scheduled_open_at, scheduled_send_at, sent_at, single_open, opened_at, expires_at, created_at, updated_at FROM gifts
 WHERE id = $1
