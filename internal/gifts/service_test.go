@@ -252,6 +252,26 @@ func TestService_DeleteOwned_NotFound(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrGiftNotFound)
 }
 
+func TestService_GetByViewToken(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Público",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.Equal(t, created.ID, got.ID)
+
+	_, err = svc.GetByViewToken(context.Background(), "no-such-token")
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
 func TestService_ListByOwner(t *testing.T) {
 	repo := newFakeGiftRepo()
 	svc := NewService(repo)

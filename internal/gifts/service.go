@@ -138,6 +138,12 @@ func (s *Service) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.
 	return s.repo.ListByUser(ctx, ownerID)
 }
 
+// GetByViewToken returns the gift addressed by a public view token, or
+// domain.ErrGiftNotFound. The caller applies the visibility gate (CheckVisibility).
+func (s *Service) GetByViewToken(ctx context.Context, token string) (domain.Gift, error) {
+	return s.repo.GetByViewToken(ctx, token)
+}
+
 // DeleteOwned removes the gift with id, only if ownerID is its creator. Same
 // error contract as GetOwned.
 func (s *Service) DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error {

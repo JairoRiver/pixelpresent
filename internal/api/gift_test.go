@@ -44,6 +44,11 @@ type fakeGiftService struct {
 	listOwner uuid.UUID
 	listOut   []domain.Gift
 	listErr   error
+
+	viewCalls int
+	gotToken  string
+	viewOut   domain.Gift
+	viewErr   error
 }
 
 func (f *fakeGiftService) Create(_ context.Context, in gifts.CreateInput) (domain.Gift, error) {
@@ -78,6 +83,12 @@ func (f *fakeGiftService) ListByOwner(_ context.Context, ownerID uuid.UUID) ([]d
 	f.listCalls++
 	f.listOwner = ownerID
 	return f.listOut, f.listErr
+}
+
+func (f *fakeGiftService) GetByViewToken(_ context.Context, token string) (domain.Gift, error) {
+	f.viewCalls++
+	f.gotToken = token
+	return f.viewOut, f.viewErr
 }
 
 const giftTestSecret = "gift-secret"

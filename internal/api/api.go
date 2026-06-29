@@ -36,6 +36,7 @@ type GiftService interface {
 	UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in gifts.UpdateInput) (domain.Gift, error)
 	DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error
 	ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error)
+	GetByViewToken(ctx context.Context, token string) (domain.Gift, error)
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
@@ -60,6 +61,9 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/magic-link", s.handleRequestMagicLink)
 		r.Get("/verify", s.handleVerify)
 	})
+
+	// Public recipient-facing view of a gift by its shareable token (no session).
+	r.Get("/g/{view_token}", s.handleViewGift)
 
 	// Routes requiring an authenticated creator session.
 	r.Group(func(r chi.Router) {
