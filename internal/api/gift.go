@@ -257,3 +257,72 @@ func (s *Server) handleDeleteGift(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// giftSummary is the lighter list representation for the dashboard: it keeps
+// pixel_art (the thumbnail is the pixel grid itself) and the status fields, but
+// drops message and reveal_config, which are only needed in the detail view
+// (GET /gifts/{id}).
+type giftSummary struct {
+	ID              uuid.UUID       `json:"id"`
+	Title           string          `json:"title"`
+	PixelArt        json.RawMessage `json:"pixel_art"`
+	RevealType      string          `json:"reveal_type"`
+	ViewToken       string          `json:"view_token"`
+	RecipientEmail  *string         `json:"recipient_email,omitempty"`
+	ScheduledOpenAt *time.Time      `json:"scheduled_open_at,omitempty"`
+	ScheduledSendAt *time.Time      `json:"scheduled_send_at,omitempty"`
+	SentAt          *time.Time      `json:"sent_at,omitempty"`
+	SingleOpen      bool            `json:"single_open"`
+	OpenedAt        *time.Time      `json:"opened_at,omitempty"`
+	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+func toGiftSummary(g domain.Gift) giftSummary {
+	return giftSummary{
+		ID:              g.ID,
+		Title:           g.Title,
+		PixelArt:        g.PixelArt,
+		RevealType:      g.RevealType,
+		ViewToken:       g.ViewToken,
+		RecipientEmail:  g.RecipientEmail,
+		ScheduledOpenAt: g.ScheduledOpenAt,
+		ScheduledSendAt: g.ScheduledSendAt,
+		SentAt:          g.SentAt,
+		SingleOpen:      g.SingleOpen,
+		OpenedAt:        g.OpenedAt,
+		ExpiresAt:       g.ExpiresAt,
+		CreatedAt:       g.CreatedAt,
+		UpdatedAt:       g.UpdatedAt,
+	}
+}
+
+// listGiftsResponse wraps the gift list so the shape can grow (e.g. pagination)
+// without breaking clients that expect a JSON object.
+type listGiftsResponse struct {
+	Gifts []giftSummary `json:"gifts"`
+}
+
+// handleListGifts handles GET /gifts, returning the authenticated creator's
+// gifts (newest first) as lightweight summaries for the dashboard.
+func (s *Server) handleListGifts(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, codeUnauthorized)
+		return
+	}
+
+	list, err := s.gifts.ListByOwner(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("list gifts failed")
+		respondError(w, http.StatusInternalServerError, codeInternalError)
+		return
+	}
+
+	resp := listGiftsResponse{Gifts: make([]giftSummary, len(list))}
+	for i, g := range list {
+		resp.Gifts[i] = toGiftSummary(g)
+	}
+	respondJSON(w, http.StatusOK, resp)
+}

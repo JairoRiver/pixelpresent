@@ -132,6 +132,12 @@ func (s *Service) UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in Upd
 	return s.repo.Update(ctx, gift)
 }
 
+// ListByOwner returns every gift created by ownerID (newest first), for the
+// creator's dashboard.
+func (s *Service) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error) {
+	return s.repo.ListByUser(ctx, ownerID)
+}
+
 // DeleteOwned removes the gift with id, only if ownerID is its creator. Same
 // error contract as GetOwned.
 func (s *Service) DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error {

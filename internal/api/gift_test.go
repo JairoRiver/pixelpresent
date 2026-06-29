@@ -39,6 +39,11 @@ type fakeGiftService struct {
 
 	deleteCalls int
 	deleteErr   error
+
+	listCalls int
+	listOwner uuid.UUID
+	listOut   []domain.Gift
+	listErr   error
 }
 
 func (f *fakeGiftService) Create(_ context.Context, in gifts.CreateInput) (domain.Gift, error) {
@@ -67,6 +72,12 @@ func (f *fakeGiftService) DeleteOwned(_ context.Context, id, ownerID uuid.UUID) 
 	f.gotID = id
 	f.gotOwner = ownerID
 	return f.deleteErr
+}
+
+func (f *fakeGiftService) ListByOwner(_ context.Context, ownerID uuid.UUID) ([]domain.Gift, error) {
+	f.listCalls++
+	f.listOwner = ownerID
+	return f.listOut, f.listErr
 }
 
 const giftTestSecret = "gift-secret"
@@ -430,4 +441,74 @@ func TestDeleteGift_InvalidID(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
 	require.Zero(t, fake.deleteCalls)
+}
+
+// --- GET /gifts ---
+
+// listGifts sends GET /gifts with a valid session cookie for userID.
+func listGifts(t *testing.T, gift GiftService, sessions *auth.SessionManager, userID uuid.UUID) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, sessions, gift)
+
+	issue := httptest.NewRecorder()
+	sessions.SetCookie(issue, userID)
+
+	req := httptest.NewRequest(http.MethodGet, "/gifts", nil)
+	req.AddCookie(issue.Result().Cookies()[0])
+
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestListGifts_RequiresSession(t *testing.T) {
+	fake := &fakeGiftService{}
+	srv := NewServer(nil, giftSessions(), fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/gifts", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, fake.listCalls)
+}
+
+func TestListGifts_Empty(t *testing.T) {
+	fake := &fakeGiftService{listOut: []domain.Gift{}}
+	rec := listGifts(t, fake, giftSessions(), uuid.New())
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	// Empty must serialize as [], not null.
+	require.JSONEq(t, `{"gifts":[]}`, rec.Body.String())
+}
+
+func TestListGifts_ReturnsOwnGifts(t *testing.T) {
+	userID := uuid.New()
+	g1 := domain.Gift{ID: uuid.New(), CreatorID: userID, Title: "Uno", ViewToken: "t1", Message: "secreto"}
+	g2 := domain.Gift{ID: uuid.New(), CreatorID: userID, Title: "Dos", ViewToken: "t2"}
+	fake := &fakeGiftService{listOut: []domain.Gift{g1, g2}}
+
+	rec := listGifts(t, fake, giftSessions(), userID)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, fake.listCalls)
+	require.Equal(t, userID, fake.listOwner, "lists only the session user's gifts")
+
+	var resp listGiftsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Gifts, 2)
+	require.Equal(t, "Uno", resp.Gifts[0].Title)
+	require.Equal(t, "t1", resp.Gifts[0].ViewToken)
+
+	// The summary must not leak message or reveal_config.
+	require.NotContains(t, rec.Body.String(), "secreto")
+	require.NotContains(t, rec.Body.String(), "reveal_config")
+}
+
+func TestListGifts_ServiceError(t *testing.T) {
+	fake := &fakeGiftService{listErr: errors.New("db down")}
+	rec := listGifts(t, fake, giftSessions(), uuid.New())
+
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	require.Equal(t, codeInternalError, decodeErrorCode(t, rec))
 }

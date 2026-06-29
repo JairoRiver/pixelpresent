@@ -35,6 +35,7 @@ type GiftService interface {
 	GetOwned(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error)
 	UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in gifts.UpdateInput) (domain.Gift, error)
 	DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error
+	ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error)
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
@@ -64,6 +65,7 @@ func (s *Server) Routes() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.sessions.RequireSession)
 		r.Post("/gifts", s.handleCreateGift)
+		r.Get("/gifts", s.handleListGifts)
 		r.Get("/gifts/{id}", s.handleGetGift)
 		r.Put("/gifts/{id}", s.handleUpdateGift)
 		r.Delete("/gifts/{id}", s.handleDeleteGift)

@@ -251,3 +251,32 @@ func TestService_DeleteOwned_NotFound(t *testing.T) {
 	err := svc.DeleteOwned(context.Background(), uuid.New(), uuid.New())
 	require.ErrorIs(t, err, domain.ErrGiftNotFound)
 }
+
+func TestService_ListByOwner(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+	owner := uuid.New()
+	other := uuid.New()
+
+	base := CreateInput{PixelArt: json.RawMessage(`{}`), RevealType: "box"}
+	mine1 := base
+	mine1.CreatorID = owner
+	mine1.Title = "A"
+	mine2 := base
+	mine2.CreatorID = owner
+	mine2.Title = "B"
+	foreign := base
+	foreign.CreatorID = other
+	foreign.Title = "C"
+	for _, in := range []CreateInput{mine1, mine2, foreign} {
+		_, err := svc.Create(context.Background(), in)
+		require.NoError(t, err)
+	}
+
+	list, err := svc.ListByOwner(context.Background(), owner)
+	require.NoError(t, err)
+	require.Len(t, list, 2, "only the owner's gifts")
+	for _, g := range list {
+		require.Equal(t, owner, g.CreatorID)
+	}
+}
