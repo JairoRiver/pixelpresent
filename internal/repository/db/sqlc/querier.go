@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	CreateGift(ctx context.Context, arg CreateGiftParams) (Gift, error)
 	CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams) (MagicLink, error)
+	CreateReaction(ctx context.Context, arg CreateReactionParams) (Reaction, error)
 	CreateUser(ctx context.Context, email string) (User, error)
 	// Hard delete; media and reactions rows cascade via their FKs. Returns the
 	// number of rows deleted so the caller can tell "not found" from "deleted".
@@ -23,6 +24,10 @@ type Querier interface {
 	GetUser(ctx context.Context, arg GetUserParams) (User, error)
 	GiftViewTokenExists(ctx context.Context, viewToken string) (bool, error)
 	ListGiftsByUser(ctx context.Context, creatorID uuid.UUID) ([]Gift, error)
+	// Chronological wall of reactions for the creator's view (oldest first).
+	// Borrar las reacciones al borrar el regalo lo cubre la FK ON DELETE CASCADE;
+	// el borrado de una reacción individual (moderación) queda pendiente de diseño.
+	ListReactionsByGift(ctx context.Context, giftID uuid.UUID) ([]Reaction, error)
 	MarkMagicLinkConsumed(ctx context.Context, id uuid.UUID) (MagicLink, error)
 	// Full-replace of the creator-editable fields (the editor holds the whole gift
 	// state): passing NULL clears a nullable field. view_token, creator_id and
