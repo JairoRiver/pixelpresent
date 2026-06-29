@@ -69,6 +69,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.Reaction, 
 	return s.reactions.Create(ctx, reaction)
 }
 
+// ListForOwner returns the reactions on the gift with giftID, only if ownerID is
+// its creator. It returns domain.ErrGiftNotFound (no such gift) or
+// domain.ErrGiftForbidden (owned by someone else), mirroring gifts.GetOwned.
+func (s *Service) ListForOwner(ctx context.Context, giftID, ownerID uuid.UUID) ([]domain.Reaction, error) {
+	gift, err := s.gifts.GetByID(ctx, giftID)
+	if err != nil {
+		return nil, err
+	}
+	if gift.CreatorID != ownerID {
+		return nil, domain.ErrGiftForbidden
+	}
+	return s.reactions.ListByGift(ctx, giftID)
+}
+
 // buildReaction validates the payload for its kind and returns the domain
 // reaction to persist, or domain.ErrReactionInvalid.
 func buildReaction(giftID uuid.UUID, in CreateInput) (domain.Reaction, error) {

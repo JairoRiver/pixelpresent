@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/JairoRiver/pixelpresent/internal/auth"
 	"github.com/JairoRiver/pixelpresent/internal/domain"
 	"github.com/JairoRiver/pixelpresent/internal/reactions"
 )
@@ -75,4 +76,47 @@ func (s *Server) handleCreateReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusCreated, toReactionResponse(reaction))
+}
+
+// listReactionsResponse wraps the reaction list so the shape can grow without
+// breaking clients that expect a JSON object.
+type listReactionsResponse struct {
+	Reactions []reactionResponse `json:"reactions"`
+}
+
+// handleListReactions handles GET /gifts/{id}/reactions, returning a gift's
+// reactions (oldest first) only to its creator. 200 on success, 403 foreign,
+// 404 missing.
+func (s *Server) handleListReactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, codeUnauthorized)
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, codeInvalidID)
+		return
+	}
+
+	list, err := s.reactions.ListForOwner(r.Context(), id, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrGiftNotFound):
+			respondError(w, http.StatusNotFound, codeGiftNotFound)
+		case errors.Is(err, domain.ErrGiftForbidden):
+			respondError(w, http.StatusForbidden, codeForbidden)
+		default:
+			log.Error().Err(err).Msg("list reactions failed")
+			respondError(w, http.StatusInternalServerError, codeInternalError)
+		}
+		return
+	}
+
+	resp := listReactionsResponse{Reactions: make([]reactionResponse, len(list))}
+	for i, reaction := range list {
+		resp.Reactions[i] = toReactionResponse(reaction)
+	}
+	respondJSON(w, http.StatusOK, resp)
 }

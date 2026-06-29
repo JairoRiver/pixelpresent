@@ -44,6 +44,7 @@ type GiftService interface {
 // *reactions.Service satisfies it.
 type ReactionService interface {
 	Create(ctx context.Context, in reactions.CreateInput) (domain.Reaction, error)
+	ListForOwner(ctx context.Context, giftID, ownerID uuid.UUID) ([]domain.Reaction, error)
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
@@ -82,6 +83,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/gifts/{id}", s.handleGetGift)
 		r.Put("/gifts/{id}", s.handleUpdateGift)
 		r.Delete("/gifts/{id}", s.handleDeleteGift)
+		r.Get("/gifts/{id}/reactions", s.handleListReactions)
 	})
 
 	return r
