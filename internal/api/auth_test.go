@@ -41,10 +41,10 @@ func (f *fakeAuth) VerifyMagicLink(_ context.Context, token string) (domain.User
 }
 
 // newTestServer builds a Server with a real session manager so cookie wiring is
-// exercised end to end.
+// exercised end to end. The gift service is nil: auth tests do not hit /gifts.
 func newTestServer(svc AuthService) *Server {
 	sessions := auth.NewSessionManager("test-secret", false, 30*24*time.Hour)
-	return NewServer(svc, sessions)
+	return NewServer(svc, sessions, nil)
 }
 
 func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {

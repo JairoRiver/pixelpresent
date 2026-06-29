@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/JairoRiver/pixelpresent/internal/domain"
+	"github.com/JairoRiver/pixelpresent/internal/gifts"
 )
 
 // AuthService is the slice of the auth service the API depends on. *auth.Service
@@ -20,21 +21,29 @@ type AuthService interface {
 	VerifyMagicLink(ctx context.Context, token string) (domain.User, error)
 }
 
-// SessionWriter issues the session cookie after a successful verification.
+// Sessions issues the session cookie and guards protected routes.
 // *auth.SessionManager satisfies it.
-type SessionWriter interface {
+type Sessions interface {
 	SetCookie(w http.ResponseWriter, userID uuid.UUID)
+	RequireSession(next http.Handler) http.Handler
+}
+
+// GiftService is the slice of the gift service the API depends on. *gifts.Service
+// satisfies it.
+type GiftService interface {
+	Create(ctx context.Context, in gifts.CreateInput) (domain.Gift, error)
 }
 
 // Server holds the dependencies of the HTTP handlers and builds the router.
 type Server struct {
 	auth     AuthService
-	sessions SessionWriter
+	sessions Sessions
+	gifts    GiftService
 }
 
 // NewServer builds the API server over its service dependencies.
-func NewServer(auth AuthService, sessions SessionWriter) *Server {
-	return &Server{auth: auth, sessions: sessions}
+func NewServer(auth AuthService, sessions Sessions, gifts GiftService) *Server {
+	return &Server{auth: auth, sessions: sessions, gifts: gifts}
 }
 
 // Routes builds the chi router with every route mounted.
@@ -46,6 +55,12 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/magic-link", s.handleRequestMagicLink)
 		r.Get("/verify", s.handleVerify)
+	})
+
+	// Routes requiring an authenticated creator session.
+	r.Group(func(r chi.Router) {
+		r.Use(s.sessions.RequireSession)
+		r.Post("/gifts", s.handleCreateGift)
 	})
 
 	return r
