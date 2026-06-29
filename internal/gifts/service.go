@@ -76,3 +76,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.Gift, erro
 		ExpiresAt:       in.ExpiresAt,
 	})
 }
+
+// GetOwned returns the gift with id only if ownerID is its creator. It returns
+// domain.ErrGiftNotFound if the gift does not exist and domain.ErrGiftForbidden
+// if it exists but belongs to someone else.
+func (s *Service) GetOwned(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error) {
+	gift, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return domain.Gift{}, err
+	}
+	if gift.CreatorID != ownerID {
+		return domain.Gift{}, domain.ErrGiftForbidden
+	}
+	return gift, nil
+}

@@ -16,6 +16,8 @@ var (
 	ErrMagicLinkConsumed = errors.New("magic link already consumed")
 	// ErrGiftNotFound is returned when a gift lookup matches no row.
 	ErrGiftNotFound = errors.New("gift not found")
+	// ErrGiftForbidden is returned when a user acts on a gift they do not own.
+	ErrGiftForbidden = errors.New("gift forbidden")
 	// ErrDuplicateViewToken is returned when creating a gift whose view token
 	// already exists (the unique constraint backstops the generator).
 	ErrDuplicateViewToken = errors.New("view token already exists")

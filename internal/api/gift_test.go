@@ -25,12 +25,25 @@ type fakeGiftService struct {
 	gotInput gifts.CreateInput
 	out      domain.Gift
 	err      error
+
+	getCalls int
+	gotID    uuid.UUID
+	gotOwner uuid.UUID
+	getOut   domain.Gift
+	getErr   error
 }
 
 func (f *fakeGiftService) Create(_ context.Context, in gifts.CreateInput) (domain.Gift, error) {
 	f.calls++
 	f.gotInput = in
 	return f.out, f.err
+}
+
+func (f *fakeGiftService) GetOwned(_ context.Context, id, ownerID uuid.UUID) (domain.Gift, error) {
+	f.getCalls++
+	f.gotID = id
+	f.gotOwner = ownerID
+	return f.getOut, f.getErr
 }
 
 const giftTestSecret = "gift-secret"
@@ -153,4 +166,83 @@ func TestCreateGift_ServiceError(t *testing.T) {
 
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	require.Equal(t, codeInternalError, decodeErrorCode(t, rec))
+}
+
+// --- GET /gifts/{id} ---
+
+// getGift sends GET /gifts/{id} with a valid session cookie for userID.
+func getGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, userID uuid.UUID, id string) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, sessions, gift)
+
+	issue := httptest.NewRecorder()
+	sessions.SetCookie(issue, userID)
+
+	req := httptest.NewRequest(http.MethodGet, "/gifts/"+id, nil)
+	req.AddCookie(issue.Result().Cookies()[0])
+
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestGetGift_RequiresSession(t *testing.T) {
+	fake := &fakeGiftService{}
+	srv := NewServer(nil, giftSessions(), fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/gifts/"+uuid.NewString(), nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, fake.getCalls)
+}
+
+func TestGetGift_Own(t *testing.T) {
+	userID := uuid.New()
+	giftID := uuid.New()
+	fake := &fakeGiftService{getOut: domain.Gift{
+		ID:        giftID,
+		CreatorID: userID,
+		Title:     "Mi regalo",
+		ViewToken: "tok-xyz",
+	}}
+
+	rec := getGift(t, fake, giftSessions(), userID, giftID.String())
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, fake.getCalls)
+	require.Equal(t, giftID, fake.gotID)
+	require.Equal(t, userID, fake.gotOwner, "ownership is checked against the session user")
+
+	var resp giftResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, giftID, resp.ID)
+	require.Equal(t, "Mi regalo", resp.Title)
+	require.Equal(t, "tok-xyz", resp.ViewToken)
+}
+
+func TestGetGift_Foreign(t *testing.T) {
+	fake := &fakeGiftService{getErr: domain.ErrGiftForbidden}
+	rec := getGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, codeForbidden, decodeErrorCode(t, rec))
+}
+
+func TestGetGift_NotFound(t *testing.T) {
+	fake := &fakeGiftService{getErr: domain.ErrGiftNotFound}
+	rec := getGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
+}
+
+func TestGetGift_InvalidID(t *testing.T) {
+	fake := &fakeGiftService{}
+	rec := getGift(t, fake, giftSessions(), uuid.New(), "not-a-uuid")
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
+	require.Zero(t, fake.getCalls, "the service must not run on a malformed id")
 }

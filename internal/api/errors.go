@@ -15,7 +15,10 @@ const (
 	codeInvalidGift       = "invalid_gift"
 	codeInvalidRevealType = "invalid_reveal_type"
 	codeInvalidPixelArt   = "invalid_pixel_art"
+	codeInvalidID         = "invalid_id"
 	codeUnauthorized      = "unauthorized"
+	codeForbidden         = "forbidden"
+	codeGiftNotFound      = "gift_not_found"
 	codeInternalError     = "internal_error"
 )
 
@@ -26,7 +29,10 @@ var errorMessages = map[string]string{
 	codeInvalidGift:       "datos del regalo inválidos",
 	codeInvalidRevealType: "tipo de revelación inválido",
 	codeInvalidPixelArt:   "pixel art inválido",
+	codeInvalidID:         "identificador inválido",
 	codeUnauthorized:      "se requiere una sesión válida",
+	codeForbidden:         "no tienes permiso sobre este regalo",
+	codeGiftNotFound:      "regalo no encontrado",
 	codeInternalError:     "error interno",
 }
 
