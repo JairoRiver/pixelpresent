@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	// verifyPath is the path of the verification endpoint (see PP-19).
-	verifyPath = "/auth/verify"
+	// verifyPath is the path of the verification endpoint (see PP-19); the API is
+	// mounted under /api (PP-39.5), so the emailed link points there.
+	verifyPath = "/api/auth/verify"
 	// magicLinkSubject is the subject of the login email.
 	magicLinkSubject = "Tu enlace de acceso a Pixel Present"
 )

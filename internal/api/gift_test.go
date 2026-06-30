@@ -105,7 +105,7 @@ func postGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, use
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodPost, "/gifts", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/gifts", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(issue.Result().Cookies()[0])
 
@@ -127,7 +127,7 @@ func TestCreateGift_RequiresSession(t *testing.T) {
 	srv := NewServer(nil, giftSessions(), fake, nil)
 
 	// No cookie attached.
-	req := httptest.NewRequest(http.MethodPost, "/gifts", strings.NewReader(validGiftBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/gifts", strings.NewReader(validGiftBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
@@ -223,7 +223,7 @@ func getGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, user
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts/"+id, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts/"+id, nil)
 	req.AddCookie(issue.Result().Cookies()[0])
 
 	rec := httptest.NewRecorder()
@@ -235,7 +235,7 @@ func TestGetGift_RequiresSession(t *testing.T) {
 	fake := &fakeGiftService{}
 	srv := NewServer(nil, giftSessions(), fake, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts/"+uuid.NewString(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts/"+uuid.NewString(), nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
@@ -302,7 +302,7 @@ func putGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, user
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodPut, "/gifts/"+id, strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/gifts/"+id, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(issue.Result().Cookies()[0])
 
@@ -315,7 +315,7 @@ func TestUpdateGift_RequiresSession(t *testing.T) {
 	fake := &fakeGiftService{}
 	srv := NewServer(nil, giftSessions(), fake, nil)
 
-	req := httptest.NewRequest(http.MethodPut, "/gifts/"+uuid.NewString(), strings.NewReader(validGiftBody))
+	req := httptest.NewRequest(http.MethodPut, "/api/gifts/"+uuid.NewString(), strings.NewReader(validGiftBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
@@ -395,7 +395,7 @@ func deleteGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, u
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodDelete, "/gifts/"+id, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/gifts/"+id, nil)
 	req.AddCookie(issue.Result().Cookies()[0])
 
 	rec := httptest.NewRecorder()
@@ -407,7 +407,7 @@ func TestDeleteGift_RequiresSession(t *testing.T) {
 	fake := &fakeGiftService{}
 	srv := NewServer(nil, giftSessions(), fake, nil)
 
-	req := httptest.NewRequest(http.MethodDelete, "/gifts/"+uuid.NewString(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/gifts/"+uuid.NewString(), nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
@@ -464,7 +464,7 @@ func listGifts(t *testing.T, gift GiftService, sessions *auth.SessionManager, us
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts", nil)
 	req.AddCookie(issue.Result().Cookies()[0])
 
 	rec := httptest.NewRecorder()
@@ -476,7 +476,7 @@ func TestListGifts_RequiresSession(t *testing.T) {
 	fake := &fakeGiftService{}
 	srv := NewServer(nil, giftSessions(), fake, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts", nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 

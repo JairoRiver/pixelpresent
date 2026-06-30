@@ -72,35 +72,38 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 
-	r.Route("/auth", func(r chi.Router) {
-		r.Post("/magic-link", s.handleRequestMagicLink)
-		r.Get("/verify", s.handleVerify)
+	// The JSON API lives under /api so the static frontend can own the clean URLs
+	// (/, /dashboard, /g/{token}) at the same origin in production.
+	r.Route("/api", func(r chi.Router) {
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/magic-link", s.handleRequestMagicLink)
+			r.Get("/verify", s.handleVerify)
+		})
+
+		// Public recipient-facing routes addressed by the shareable token (no session).
+		r.Get("/g/{view_token}", s.handleViewGift)
+		r.Post("/g/{view_token}/reactions", s.handleCreateReaction)
+
+		// Routes requiring an authenticated creator session.
+		r.Group(func(r chi.Router) {
+			r.Use(s.sessions.RequireSession)
+			r.Post("/gifts", s.handleCreateGift)
+			r.Get("/gifts", s.handleListGifts)
+			r.Get("/gifts/{id}", s.handleGetGift)
+			r.Put("/gifts/{id}", s.handleUpdateGift)
+			r.Delete("/gifts/{id}", s.handleDeleteGift)
+			r.Get("/gifts/{id}/reactions", s.handleListReactions)
+		})
+
+		// Development-only API docs, mounted only when explicitly enabled.
+		if s.docsEnabled {
+			r.Get("/docs", s.handleDocsUI)
+			r.Get("/docs/openapi.yaml", s.handleOpenAPISpec)
+		}
 	})
 
-	// Public recipient-facing routes addressed by the shareable token (no session).
-	r.Get("/g/{view_token}", s.handleViewGift)
-	r.Post("/g/{view_token}/reactions", s.handleCreateReaction)
-
-	// Routes requiring an authenticated creator session.
-	r.Group(func(r chi.Router) {
-		r.Use(s.sessions.RequireSession)
-		r.Post("/gifts", s.handleCreateGift)
-		r.Get("/gifts", s.handleListGifts)
-		r.Get("/gifts/{id}", s.handleGetGift)
-		r.Put("/gifts/{id}", s.handleUpdateGift)
-		r.Delete("/gifts/{id}", s.handleDeleteGift)
-		r.Get("/gifts/{id}/reactions", s.handleListReactions)
-	})
-
-	// Development-only API docs, mounted only when explicitly enabled.
-	if s.docsEnabled {
-		r.Get("/docs", s.handleDocsUI)
-		r.Get("/docs/openapi.yaml", s.handleOpenAPISpec)
-	}
-
-	// Serve the embedded frontend for any path the API does not handle. The API
-	// routes above take precedence; everything else (/, /_astro/*, ...) falls
-	// through to the static site.
+	// Serve the embedded frontend for any path the API does not handle (root and
+	// every non-/api route): /, /_astro/*, ...
 	if s.static != nil {
 		fileServer := http.FileServerFS(s.static)
 		r.NotFound(fileServer.ServeHTTP)

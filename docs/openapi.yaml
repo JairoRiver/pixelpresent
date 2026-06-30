@@ -10,10 +10,12 @@ info:
     **Errors** use a single envelope: `{"error":{"code","message"}}`. Clients key
     off the stable `code`; `message` is a human-readable hint.
 
-    **Auth** is a session cookie (`pp_session`) set by `GET /auth/verify` after a
-    valid magic link. Protected endpoints require it.
+    **Auth** is a session cookie (`pp_session`) set by `GET /api/auth/verify`
+    after a valid magic link. Protected endpoints require it.
+
+    All paths below are relative to the `/api` base (see `servers`).
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8080/api
     description: Local development
 
 tags:

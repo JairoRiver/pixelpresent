@@ -70,9 +70,9 @@ func TestRequestMagicLink_NewUser(t *testing.T) {
 	require.WithinDuration(t, time.Now().Add(testTTL), link.ExpiresAt, time.Minute)
 
 	// The URL has no duplicated slash and the copy reflects the TTL.
-	require.Contains(t, sent.BodyText, "https://pixel.example/auth/verify?token=")
+	require.Contains(t, sent.BodyText, "https://pixel.example/api/auth/verify?token=")
 	require.Contains(t, sent.BodyText, "15 minutos")
-	require.Contains(t, sent.BodyHTML, "https://pixel.example/auth/verify?token=")
+	require.Contains(t, sent.BodyHTML, "https://pixel.example/api/auth/verify?token=")
 }
 
 func TestRequestMagicLink_ExistingUserIsReused(t *testing.T) {

@@ -17,7 +17,7 @@ const docsHTML = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
-    <script id="api-reference" data-url="/docs/openapi.yaml"></script>
+    <script id="api-reference" data-url="/api/docs/openapi.yaml"></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
 </html>`

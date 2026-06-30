@@ -59,7 +59,7 @@ func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 // postMagicLink sends body to POST /auth/magic-link through the real chi router.
 func postMagicLink(t *testing.T, svc AuthService, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/auth/magic-link", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/magic-link", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	newTestServer(svc).Routes().ServeHTTP(rec, req)
@@ -121,7 +121,7 @@ func TestRequestMagicLink_DoesNotLeakExistence(t *testing.T) {
 // getVerify hits GET /auth/verify?token=<token> through the real chi router.
 func getVerify(t *testing.T, svc AuthService, token string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/auth/verify?token="+token, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/verify?token="+token, nil)
 	rec := httptest.NewRecorder()
 	newTestServer(svc).Routes().ServeHTTP(rec, req)
 	return rec
@@ -173,7 +173,7 @@ func TestVerify_InvalidOrExpired(t *testing.T) {
 
 func TestVerify_MissingToken(t *testing.T) {
 	fake := &fakeAuth{}
-	req := httptest.NewRequest(http.MethodGet, "/auth/verify", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/verify", nil)
 	rec := httptest.NewRecorder()
 	newTestServer(fake).Routes().ServeHTTP(rec, req)
 

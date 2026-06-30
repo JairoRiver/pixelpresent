@@ -43,7 +43,7 @@ func (f *fakeReactionService) ListForOwner(_ context.Context, giftID, ownerID uu
 func postReaction(t *testing.T, svc ReactionService, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	srv := NewServer(nil, giftSessions(), nil, svc)
-	req := httptest.NewRequest(http.MethodPost, "/g/"+token+"/reactions", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/g/"+token+"/reactions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
@@ -119,7 +119,7 @@ func listReactions(t *testing.T, svc ReactionService, userID uuid.UUID, id strin
 	issue := httptest.NewRecorder()
 	sessions.SetCookie(issue, userID)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts/"+id+"/reactions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts/"+id+"/reactions", nil)
 	req.AddCookie(issue.Result().Cookies()[0])
 
 	rec := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestListReactions_RequiresSession(t *testing.T) {
 	fake := &fakeReactionService{}
 	srv := NewServer(nil, giftSessions(), nil, fake)
 
-	req := httptest.NewRequest(http.MethodGet, "/gifts/"+uuid.NewString()+"/reactions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/gifts/"+uuid.NewString()+"/reactions", nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 

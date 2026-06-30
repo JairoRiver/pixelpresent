@@ -17,7 +17,7 @@ import (
 func viewGift(t *testing.T, gift GiftService, token string) *httptest.ResponseRecorder {
 	t.Helper()
 	srv := NewServer(nil, giftSessions(), gift, nil)
-	req := httptest.NewRequest(http.MethodGet, "/g/"+token, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/g/"+token, nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 	return rec
