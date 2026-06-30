@@ -1,15 +1,92 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// Value-proposition pillars (pixel_present.md §3). Emojis are decorative.
+const pillars = [
+  { icon: '✏️', label: 'Creación personal' },
+  { icon: '⏳', label: 'Anticipación' },
+  { icon: '✨', label: 'Interacción' },
+  { icon: '🎁', label: 'Sorpresa' },
+  { icon: '💌', label: 'Recuerdos compartidos' },
+];
 ---
 
-<Layout title="Pixel Present">
-  <main
-    class="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-6 px-6 text-center"
-  >
-    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Pixel Present</h1>
-    <p class="text-lg text-slate-300">
-      Regalos de pixel art que se revelan con una animación.
-    </p>
-    <p class="text-sm text-slate-500">Landing en construcción (PP-37).</p>
-  </main>
+<Layout title="Pixel Present — regalos píxel a píxel">
+  <div class="relative isolate overflow-hidden">
+    <!-- warm retro glow -->
+    <div
+      class="pointer-events-none absolute inset-x-0 -top-40 -z-10 transform-gpu blur-3xl"
+      aria-hidden="true"
+    >
+      <div
+        class="mx-auto aspect-1155/678 w-6xl max-w-none bg-linear-to-tr from-amber-500/30 to-rose-500/30 opacity-40"
+      >
+      </div>
+    </div>
+
+    <header class="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
+      <span class="font-mono text-sm font-bold tracking-widest text-amber-300">
+        PIXEL&nbsp;PRESENT
+      </span>
+      <a href="/login" class="text-sm font-medium text-slate-300 transition hover:text-white">
+        Entrar
+      </a>
+    </header>
+
+    <main class="mx-auto max-w-3xl px-6 pb-24 pt-12 text-center sm:pt-20">
+      <p
+        class="mb-4 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 font-mono text-xs uppercase tracking-widest text-amber-200"
+      >
+        Regalos digitales, píxel a píxel
+      </p>
+      <h1 class="text-balance text-4xl font-extrabold tracking-tight sm:text-6xl">
+        Un regalo que no se abre,<br class="hidden sm:inline" /> se descubre.
+      </h1>
+      <p class="mx-auto mt-6 max-w-xl text-pretty text-lg text-slate-300">
+        Pixel Present transforma un dibujo sencillo en una sorpresa interactiva,
+        dibujada píxel a píxel, para alguien importante.
+      </p>
+      <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <a
+          href="/login"
+          class="rounded-md bg-amber-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-300"
+        >
+          Crear un regalo
+        </a>
+        <a href="#como" class="text-sm font-medium text-slate-300 transition hover:text-white">
+          Cómo funciona →
+        </a>
+      </div>
+    </main>
+
+    <section id="como" class="mx-auto max-w-5xl px-6 pb-24">
+      <h2 class="mb-10 text-center text-sm font-semibold uppercase tracking-widest text-slate-400">
+        Una experiencia de regalo digital con
+      </h2>
+      <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {
+          pillars.map((p) => (
+            <li class="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-6 text-center">
+              <span class="text-3xl" aria-hidden="true">
+                {p.icon}
+              </span>
+              <span class="text-sm font-medium text-slate-200">{p.label}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="mx-auto max-w-3xl px-6 pb-28 text-center">
+      <p class="font-mono text-xl text-amber-200 sm:text-2xl">
+        Dibuja algo pequeño. Regala algo enorme.
+      </p>
+      <a
+        href="/login"
+        class="mt-8 inline-block rounded-md border border-amber-400/40 px-6 py-3 font-semibold text-amber-200 transition hover:bg-amber-400/10"
+      >
+        Empezar ahora
+      </a>
+    </section>
+  </div>
 </Layout>
