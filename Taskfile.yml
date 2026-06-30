@@ -39,13 +39,16 @@ tasks:
 
   # --- Frontend (Astro) ---
 
-  web-dev:
+  dev-front:
     desc: >-
-      Start the Astro dev server (background daemon; proxies /api to the Go
-      server on :8080). Manage it with `astro dev status|logs|stop` or `dev-down`.
+      Start the Astro dev server (background daemon; proxies /api to the Go API
+      on :8080). Returns right away; stop it with `task dev-down`. Logs:
+      `pnpm exec astro dev logs -f` (in web/).
     dir: web
     cmds:
-      - pnpm dev
+      # Clear any stale daemon first so a second `astro dev` can't hang on :4321.
+      - pnpm exec astro dev stop > /dev/null 2>&1 || true
+      - pnpm exec astro dev
 
   web-build:
     desc: Build the static frontend into web/dist.
@@ -83,18 +86,14 @@ tasks:
 
   # --- Full local stack ---
 
-  dev:
+  dev-server:
     desc: >-
-      Full dev stack — DB + migrations, the Astro dev server (background daemon)
-      and the Go API in the foreground. Ctrl+C stops the API; run `task dev-down`
-      to stop the Astro daemon and the containers.
+      Backend dev stack — containers, migrations, and the Go API in the
+      foreground (Ctrl+C stops it). Pair with `dev-front` for the frontend.
     cmds:
       - task: dev-up
       - task: db-wait
       - task: migrate-up
-      # `astro dev` runs as a background daemon and returns, so the next command
-      # (the Go API, in the foreground) starts right after it.
-      - cd web && pnpm exec astro dev
       - go run ./cmd/server serve
 
   db-wait:
