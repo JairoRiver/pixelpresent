@@ -75,7 +75,7 @@ export default function DashboardGifts() {
         <p class="text-lg text-slate-200">Aún no tienes regalos.</p>
         <p class="mt-2 text-slate-400">Crea el primero, píxel a píxel.</p>
         <a
-          href="/new"
+          href="/editor"
           class="mt-6 inline-block rounded-md bg-amber-400 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-amber-300"
         >
           Crear un regalo
@@ -98,7 +98,7 @@ export default function DashboardGifts() {
             {statusLabel(gift)} · creado el {formatDate(gift.created_at)}
           </p>
           <div class="mt-4 flex items-center gap-4 text-sm">
-            <a href={`/editor/${gift.id}`} class="font-medium text-amber-300 hover:text-amber-200">
+            <a href={`/editor?id=${gift.id}`} class="font-medium text-amber-300 hover:text-amber-200">
               Editar
             </a>
             <a href={`/g/${gift.view_token}`} class="text-slate-300 hover:text-white">
