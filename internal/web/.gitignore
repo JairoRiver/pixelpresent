@@ -1,0 +1,4 @@
+# Astro build output (produced by `task build`); only the placeholder is tracked
+# so the //go:embed directive in web.go still compiles on a fresh checkout.
+/dist/*
+!/dist/.gitkeep

@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"io/fs"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -56,6 +57,8 @@ type Server struct {
 
 	// docsEnabled mounts the OpenAPI docs routes; set via EnableDocs (dev only).
 	docsEnabled bool
+	// static serves the embedded frontend as a fallback; set via ServeStatic.
+	static fs.FS
 }
 
 // NewServer builds the API server over its service dependencies.
@@ -95,5 +98,20 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/docs/openapi.yaml", s.handleOpenAPISpec)
 	}
 
+	// Serve the embedded frontend for any path the API does not handle. The API
+	// routes above take precedence; everything else (/, /_astro/*, ...) falls
+	// through to the static site.
+	if s.static != nil {
+		fileServer := http.FileServerFS(s.static)
+		r.NotFound(fileServer.ServeHTTP)
+	}
+
 	return r
+}
+
+// ServeStatic mounts fsys (the embedded frontend) as the fallback for any route
+// the API does not handle. Like EnableDocs, it is a wiring-time switch kept off
+// NewServer so adding it does not churn every call site.
+func (s *Server) ServeStatic(fsys fs.FS) {
+	s.static = fsys
 }

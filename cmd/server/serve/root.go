@@ -16,6 +16,7 @@ import (
 	"github.com/JairoRiver/pixelpresent/internal/repository"
 	"github.com/JairoRiver/pixelpresent/internal/repository/db"
 	"github.com/JairoRiver/pixelpresent/internal/util"
+	"github.com/JairoRiver/pixelpresent/internal/web"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -90,6 +91,13 @@ func run(config util.Config) error {
 	// API docs are a development affordance: never mounted in production.
 	if config.Environment != "production" {
 		apiServer.EnableDocs()
+	}
+	// Serve the embedded frontend. If the binary was built without building the
+	// frontend, log a clear, actionable warning and keep serving the API only.
+	if staticFS, err := web.Dist(); err != nil {
+		log.Warn().Err(err).Msg("serving API without embedded frontend")
+	} else {
+		apiServer.ServeStatic(staticFS)
 	}
 
 	srv := &http.Server{
