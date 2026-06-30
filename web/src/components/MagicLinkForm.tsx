@@ -1,14 +1,26 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { isLoggedIn } from '../lib/session';
 
-type Status = 'idle' | 'sending' | 'sent' | 'error';
+type Status = 'checking' | 'idle' | 'sending' | 'sent' | 'error';
 
 // MagicLinkForm requests a passwordless login link. The same form both signs in
 // and registers: POST /api/auth/magic-link creates the account if the email is
 // new, and always answers 202, so the success copy is identical either way.
 export default function MagicLinkForm() {
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<Status>('checking');
   const [error, setError] = useState('');
+
+  // If there is already a valid session, skip the form and go to the dashboard.
+  useEffect(() => {
+    isLoggedIn().then((authed) => {
+      if (authed) {
+        window.location.replace('/dashboard');
+      } else {
+        setStatus('idle');
+      }
+    });
+  }, []);
 
   async function submit() {
     setStatus('sending');
@@ -33,6 +45,10 @@ export default function MagicLinkForm() {
       setStatus('error');
       setError('No hemos podido conectar. Comprueba tu conexión.');
     }
+  }
+
+  if (status === 'checking') {
+    return <p class="text-slate-400">Cargando…</p>;
   }
 
   if (status === 'sent') {

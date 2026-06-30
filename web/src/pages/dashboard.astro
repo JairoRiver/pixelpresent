@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import DashboardGifts from '../components/DashboardGifts.tsx';
+import LogoutButton from '../components/LogoutButton.tsx';
 ---
 
 <Layout title="Tus regalos — Pixel Present">
@@ -12,12 +13,18 @@ import DashboardGifts from '../components/DashboardGifts.tsx';
         </a>
         <h1 class="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Tus regalos</h1>
       </div>
-      <a
-        href="/new"
-        class="shrink-0 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-300"
-      >
-        Crear regalo
-      </a>
+      <div class="flex shrink-0 items-center gap-4">
+        <LogoutButton
+          client:load
+          class="text-sm font-medium text-slate-400 transition hover:text-white"
+        />
+        <a
+          href="/new"
+          class="rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-300"
+        >
+          Crear regalo
+        </a>
+      </div>
     </header>
 
     <DashboardGifts client:load />

@@ -27,6 +27,7 @@ type AuthService interface {
 // *auth.SessionManager satisfies it.
 type Sessions interface {
 	SetCookie(w http.ResponseWriter, userID uuid.UUID)
+	ClearCookie(w http.ResponseWriter)
 	RequireSession(next http.Handler) http.Handler
 }
 
@@ -78,6 +79,9 @@ func (s *Server) Routes() http.Handler {
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/magic-link", s.handleRequestMagicLink)
 			r.Get("/verify", s.handleVerify)
+			// Logout just clears the cookie; it works whether or not the caller
+			// still has a valid session.
+			r.Post("/logout", s.handleLogout)
 		})
 
 		// Public recipient-facing routes addressed by the shareable token (no session).
@@ -87,6 +91,7 @@ func (s *Server) Routes() http.Handler {
 		// Routes requiring an authenticated creator session.
 		r.Group(func(r chi.Router) {
 			r.Use(s.sessions.RequireSession)
+			r.Get("/auth/me", s.handleMe)
 			r.Post("/gifts", s.handleCreateGift)
 			r.Get("/gifts", s.handleListGifts)
 			r.Get("/gifts/{id}", s.handleGetGift)

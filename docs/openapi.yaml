@@ -91,6 +91,39 @@ paths:
             Location:
               schema: { type: string }
 
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Current session
+      description: |
+        Returns the authenticated user's id, or 401. Lets the static frontend ask
+        "am I logged in?" since the session cookie is HttpOnly.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The authenticated user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      security: []
+      summary: Log out
+      description: Clears the session cookie. Idempotent; needs no valid session.
+      responses:
+        "204":
+          description: The session cookie was cleared.
+
   /g/{view_token}:
     get:
       tags: [public]

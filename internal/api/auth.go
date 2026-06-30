@@ -6,7 +6,10 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"github.com/JairoRiver/pixelpresent/internal/auth"
 )
 
 const (
@@ -72,4 +75,29 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 	s.sessions.SetCookie(w, user.ID)
 	http.Redirect(w, r, dashboardPath, http.StatusSeeOther)
+}
+
+type meResponse struct {
+	ID uuid.UUID `json:"id"`
+}
+
+// handleMe returns the authenticated user's id (from the session cookie), or 401.
+// It lets the static frontend ask "am I logged in?" since the session cookie is
+// HttpOnly and cannot be read from JS.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		// RequireSession should guarantee this; treat defensively.
+		respondError(w, http.StatusUnauthorized, codeUnauthorized)
+		return
+	}
+	respondJSON(w, http.StatusOK, meResponse{ID: userID})
+}
+
+// handleLogout clears the session cookie. It is intentionally public and
+// idempotent: clearing the cookie is harmless whether or not the caller still
+// has a valid session.
+func (s *Server) handleLogout(w http.ResponseWriter, _ *http.Request) {
+	s.sessions.ClearCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }

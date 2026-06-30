@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import AuthError from '../components/AuthError.tsx';
+import AuthLink from '../components/AuthLink.tsx';
 
 // Value-proposition pillars (pixel_present.md §3). Emojis are decorative.
 const pillars = [
@@ -31,9 +32,14 @@ const pillars = [
       <span class="font-mono text-sm font-bold tracking-widest text-amber-300">
         PIXEL&nbsp;PRESENT
       </span>
-      <a href="/login" class="text-sm font-medium text-slate-300 transition hover:text-white">
-        Entrar
-      </a>
+      <AuthLink
+        client:load
+        loggedOutHref="/login"
+        loggedOutLabel="Entrar"
+        loggedInHref="/dashboard"
+        loggedInLabel="Tus regalos"
+        class="text-sm font-medium text-slate-300 transition hover:text-white"
+      />
     </header>
 
     <main class="mx-auto max-w-3xl px-6 pb-24 pt-12 text-center sm:pt-20">
@@ -50,12 +56,14 @@ const pillars = [
         dibujada píxel a píxel, para alguien importante.
       </p>
       <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-        <a
-          href="/login"
+        <AuthLink
+          client:load
+          loggedOutHref="/login"
+          loggedOutLabel="Crear un regalo"
+          loggedInHref="/new"
+          loggedInLabel="Crear un regalo"
           class="rounded-md bg-amber-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-300"
-        >
-          Crear un regalo
-        </a>
+        />
         <a href="#como" class="text-sm font-medium text-slate-300 transition hover:text-white">
           Cómo funciona →
         </a>
@@ -84,12 +92,14 @@ const pillars = [
       <p class="font-mono text-xl text-amber-200 sm:text-2xl">
         Dibuja algo pequeño. Regala algo enorme.
       </p>
-      <a
-        href="/login"
+      <AuthLink
+        client:load
+        loggedOutHref="/login"
+        loggedOutLabel="Empezar ahora"
+        loggedInHref="/dashboard"
+        loggedInLabel="Ir a tus regalos"
         class="mt-8 inline-block rounded-md border border-amber-400/40 px-6 py-3 font-semibold text-amber-200 transition hover:bg-amber-400/10"
-      >
-        Empezar ahora
-      </a>
+      />
     </section>
   </div>
 </Layout>
