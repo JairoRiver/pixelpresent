@@ -90,6 +90,11 @@ tasks:
     desc: >-
       Backend dev stack — containers, migrations, and the Go API in the
       foreground (Ctrl+C stops it). Pair with `dev-front` for the frontend.
+    env:
+      # Magic-link emails point at the Astro dev origin so the verify request goes
+      # through the proxy and the session cookie/redirect land on :4321 (where you
+      # develop), not on the Go server's :8080.
+      APP_BASE_URL: http://localhost:4321
     cmds:
       - task: dev-up
       - task: db-wait

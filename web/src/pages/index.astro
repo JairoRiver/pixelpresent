@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import AuthError from '../components/AuthError.tsx';
 
 // Value-proposition pillars (pixel_present.md §3). Emojis are decorative.
 const pillars = [
@@ -23,6 +24,8 @@ const pillars = [
       >
       </div>
     </div>
+
+    <AuthError client:load />
 
     <header class="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
       <span class="font-mono text-sm font-bold tracking-widest text-amber-300">
