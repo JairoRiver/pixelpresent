@@ -1,0 +1,25 @@
+---
+import Layout from '../layouts/Layout.astro';
+import DashboardGifts from '../components/DashboardGifts.tsx';
+---
+
+<Layout title="Tus regalos — Pixel Present">
+  <main class="mx-auto max-w-5xl px-6 py-10">
+    <header class="mb-8 flex items-end justify-between gap-4">
+      <div>
+        <a href="/" class="font-mono text-xs font-bold tracking-widest text-amber-300">
+          PIXEL&nbsp;PRESENT
+        </a>
+        <h1 class="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Tus regalos</h1>
+      </div>
+      <a
+        href="/new"
+        class="shrink-0 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-300"
+      >
+        Crear regalo
+      </a>
+    </header>
+
+    <DashboardGifts client:load />
+  </main>
+</Layout>
