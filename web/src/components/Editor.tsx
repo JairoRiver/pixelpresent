@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { createCanvas, fitCellSize, render, sizeCanvas, type PixelCanvas } from '../lib/canvas';
 
 // Editor is the shell of the gift editor (PP-41). It resolves which gift to work
 // on — an existing one when the URL carries ?id=<uuid>, or a fresh empty one
@@ -25,6 +26,11 @@ export default function Editor() {
   const [status, setStatus] = useState<Status>('loading');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  // The drawing model. A fixed 16×16 for PP-42; selectable sizes arrive in PP-49.
+  const modelRef = useRef<PixelCanvas>(createCanvas(16, 16));
 
   useEffect(() => {
     const id = giftIdFromURL();
@@ -59,6 +65,26 @@ export default function Editor() {
       })
       .catch(() => setStatus('error'));
   }, []);
+
+  // Draw the grid once it is in the DOM, and keep it fitted to the available
+  // width so it stays fully visible when the viewport resizes or rotates.
+  useEffect(() => {
+    if (status !== 'ready') return;
+
+    function draw() {
+      const canvas = canvasRef.current;
+      const board = boardRef.current;
+      if (!canvas || !board) return;
+      const model = modelRef.current;
+      const cellSize = fitCellSize(board.clientWidth, model);
+      const ctx = sizeCanvas(canvas, model, cellSize);
+      if (ctx) render(ctx, model, cellSize);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+    return () => window.removeEventListener('resize', draw);
+  }, [status]);
 
   if (status === 'loading') {
     return <p class="px-6 py-10 text-slate-400">Cargando el editor…</p>;
@@ -95,9 +121,12 @@ export default function Editor() {
       </header>
 
       <div class="grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[1fr_20rem]">
-        {/* Canvas area — the pixel grid arrives in PP-42. */}
-        <section class="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/5">
-          <p class="text-sm text-slate-500">El lienzo aparecerá aquí.</p>
+        {/* Canvas area. The board fits its container width (responsive/mobile);
+            zoom (PP-48) and selectable sizes (PP-49) come later. */}
+        <section class="flex items-start justify-center rounded-xl border border-white/10 bg-white/5 p-4">
+          <div ref={boardRef} class="w-full max-w-lg">
+            <canvas ref={canvasRef} class="mx-auto block" />
+          </div>
         </section>
 
         {/* Side panel — gift metadata. */}
