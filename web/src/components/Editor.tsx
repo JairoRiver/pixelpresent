@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { createCanvas, fitCellSize, render, sizeCanvas, type PixelCanvas } from '../lib/canvas';
+import {
+  colorIndex,
+  createCanvas,
+  fitCellSize,
+  paintLine,
+  render,
+  sizeCanvas,
+  type PixelCanvas,
+} from '../lib/canvas';
+
+// Default drawing colour until the palette / colour picker lands (PP-45).
+const DRAW_COLOR = '#fbbf24';
 
 // Editor is the shell of the gift editor (PP-41). It resolves which gift to work
 // on — an existing one when the URL carries ?id=<uuid>, or a fresh empty one
@@ -66,24 +77,83 @@ export default function Editor() {
       .catch(() => setStatus('error'));
   }, []);
 
-  // Draw the grid once it is in the DOM, and keep it fitted to the available
-  // width so it stays fully visible when the viewport resizes or rotates.
+  // Draw the grid once it is in the DOM and wire the pencil. The board stays
+  // fitted to the available width (responsive/mobile) and Pointer Events unify
+  // mouse and touch; pointer capture keeps a stroke going if the finger leaves
+  // the canvas. Pan mode for grids too big to fit is a later task (PP-50).
   useEffect(() => {
     if (status !== 'ready') return;
+    if (canvasRef.current === null || boardRef.current === null) return;
+    // Non-null declared types so the narrowing survives into the closures below.
+    const canvas: HTMLCanvasElement = canvasRef.current;
+    const board: HTMLDivElement = boardRef.current;
+    const model = modelRef.current;
 
-    function draw() {
-      const canvas = canvasRef.current;
-      const board = boardRef.current;
-      if (!canvas || !board) return;
-      const model = modelRef.current;
-      const cellSize = fitCellSize(board.clientWidth, model);
-      const ctx = sizeCanvas(canvas, model, cellSize);
+    let cellSize = fitCellSize(board.clientWidth, model);
+    let ctx = sizeCanvas(canvas, model, cellSize);
+    if (ctx) render(ctx, model, cellSize);
+
+    function redraw() {
+      cellSize = fitCellSize(board.clientWidth, model);
+      ctx = sizeCanvas(canvas, model, cellSize);
       if (ctx) render(ctx, model, cellSize);
     }
 
-    draw();
-    window.addEventListener('resize', draw);
-    return () => window.removeEventListener('resize', draw);
+    // Map a pointer position to a grid cell, or null if outside the grid.
+    function cellFromEvent(event: PointerEvent): { x: number; y: number } | null {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((event.clientX - rect.left) / cellSize);
+      const y = Math.floor((event.clientY - rect.top) / cellSize);
+      if (x < 0 || y < 0 || x >= model.width || y >= model.height) return null;
+      return { x, y };
+    }
+
+    let drawing = false;
+    let last: { x: number; y: number } | null = null;
+
+    function paint(from: { x: number; y: number }, to: { x: number; y: number }) {
+      const ink = colorIndex(model, DRAW_COLOR);
+      paintLine(model, from.x, from.y, to.x, to.y, ink);
+      if (ctx) render(ctx, model, cellSize);
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      const cell = cellFromEvent(event);
+      if (!cell) return;
+      drawing = true;
+      last = cell;
+      canvas.setPointerCapture(event.pointerId);
+      paint(cell, cell);
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      if (!drawing) return;
+      const cell = cellFromEvent(event);
+      if (!cell) return;
+      paint(last ?? cell, cell);
+      last = cell;
+    }
+
+    function onPointerUp(event: PointerEvent) {
+      drawing = false;
+      last = null;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('resize', redraw);
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('resize', redraw);
+    };
   }, [status]);
 
   if (status === 'loading') {
@@ -125,7 +195,7 @@ export default function Editor() {
             zoom (PP-48) and selectable sizes (PP-49) come later. */}
         <section class="flex items-start justify-center rounded-xl border border-white/10 bg-white/5 p-4">
           <div ref={boardRef} class="w-full max-w-lg">
-            <canvas ref={canvasRef} class="mx-auto block" />
+            <canvas ref={canvasRef} class="mx-auto block cursor-crosshair touch-none" />
           </div>
         </section>
 

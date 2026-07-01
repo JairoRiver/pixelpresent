@@ -44,6 +44,57 @@ export function fitCellSize(
   return Math.max(min, Math.min(max, fit));
 }
 
+// colorIndex returns the palette index for a hex colour, appending it to the
+// palette the first time it is used. The palette holds at most 255 colours
+// (0..254; 255 is EMPTY); once full it reuses the last slot rather than grow.
+export function colorIndex(model: PixelCanvas, hex: string): number {
+  const existing = model.palette.indexOf(hex);
+  if (existing !== -1) return existing;
+  if (model.palette.length >= EMPTY) return EMPTY - 1;
+  model.palette.push(hex);
+  return model.palette.length - 1;
+}
+
+// setPixel writes a palette index (or EMPTY) at (x, y), ignoring out-of-bounds
+// coordinates so callers need not clamp.
+export function setPixel(model: PixelCanvas, x: number, y: number, value: number): void {
+  if (x < 0 || y < 0 || x >= model.width || y >= model.height) return;
+  model.pixels[y * model.width + x] = value;
+}
+
+// paintLine sets every cell on the grid line from (x0, y0) to (x1, y1) to value,
+// using Bresenham so a fast pointer drag leaves no gaps between sampled points.
+export function paintLine(
+  model: PixelCanvas,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  value: number,
+): void {
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  let x = x0;
+  let y = y0;
+
+  for (;;) {
+    setPixel(model, x, y, value);
+    if (x === x1 && y === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+}
+
 const GRID_LINE = 'rgba(255, 255, 255, 0.08)';
 const EMPTY_CELL = 'rgba(255, 255, 255, 0.02)';
 
