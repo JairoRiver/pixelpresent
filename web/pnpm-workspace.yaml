@@ -1,0 +1,7 @@
+# esbuild and sharp ship prebuilt platform binaries as optional dependencies, so
+# their install scripts are not needed here — sharp only runs if we optimise
+# images (astro:assets), which we don't yet. Setting these to false skips the
+# scripts and stops pnpm 11 from failing `install` over un-decided build scripts.
+allowBuilds:
+  esbuild: false
+  sharp: false

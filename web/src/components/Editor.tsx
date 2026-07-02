@@ -2,15 +2,21 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   colorIndex,
   createCanvas,
+  EMPTY,
   fitCellSize,
   paintLine,
   render,
   sizeCanvas,
   type PixelCanvas,
 } from '../lib/canvas';
+import { EraserIcon, PencilIcon } from './icons';
 
 // Default drawing colour until the palette / colour picker lands (PP-45).
 const DRAW_COLOR = '#fbbf24';
+
+// Active drawing tool. Pencil paints the current colour; eraser clears cells
+// back to EMPTY. Both share the same pointer interaction (PP-44).
+type Tool = 'pencil' | 'eraser';
 
 // Editor is the shell of the gift editor (PP-41). It resolves which gift to work
 // on — an existing one when the URL carries ?id=<uuid>, or a fresh empty one
@@ -37,11 +43,19 @@ export default function Editor() {
   const [status, setStatus] = useState<Status>('loading');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [tool, setTool] = useState<Tool>('pencil');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   // The drawing model. A fixed 16×16 for PP-42; selectable sizes arrive in PP-49.
   const modelRef = useRef<PixelCanvas>(createCanvas(16, 16));
+  // Mirror the active tool into a ref so the pointer closures below read the
+  // current tool without re-running the drawing effect (which would rebind the
+  // listeners on every tool switch).
+  const toolRef = useRef<Tool>(tool);
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
 
   useEffect(() => {
     const id = giftIdFromURL();
@@ -112,7 +126,7 @@ export default function Editor() {
     let last: { x: number; y: number } | null = null;
 
     function paint(from: { x: number; y: number }, to: { x: number; y: number }) {
-      const ink = colorIndex(model, DRAW_COLOR);
+      const ink = toolRef.current === 'eraser' ? EMPTY : colorIndex(model, DRAW_COLOR);
       paintLine(model, from.x, from.y, to.x, to.y, ink);
       if (ctx) render(ctx, model, cellSize);
     }
@@ -193,7 +207,38 @@ export default function Editor() {
       <div class="grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[1fr_20rem]">
         {/* Canvas area. The board fits its container width (responsive/mobile);
             zoom (PP-48) and selectable sizes (PP-49) come later. */}
-        <section class="flex items-start justify-center rounded-xl border border-white/10 bg-white/5 p-4">
+        <section class="flex flex-col items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+          {/* Tool bar. Pencil and eraser share the same drawing interaction; the
+              eraser clears cells back to empty (PP-44). More tools land in
+              PP-45+ (colour picker, fill…). */}
+          <div class="flex gap-2 self-start" role="toolbar" aria-label="Herramientas de dibujo">
+            <button
+              type="button"
+              onClick={() => setTool('pencil')}
+              aria-pressed={tool === 'pencil'}
+              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                tool === 'pencil'
+                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
+                  : 'border-white/15 text-slate-300 hover:border-white/30'
+              }`}
+            >
+              <PencilIcon class="h-4 w-4" />
+              Lápiz
+            </button>
+            <button
+              type="button"
+              onClick={() => setTool('eraser')}
+              aria-pressed={tool === 'eraser'}
+              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                tool === 'eraser'
+                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
+                  : 'border-white/15 text-slate-300 hover:border-white/30'
+              }`}
+            >
+              <EraserIcon class="h-4 w-4" />
+              Borrador
+            </button>
+          </div>
           <div ref={boardRef} class="w-full max-w-lg">
             <canvas ref={canvasRef} class="mx-auto block cursor-crosshair touch-none" />
           </div>
