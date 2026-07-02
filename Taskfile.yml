@@ -29,13 +29,13 @@ tasks:
   dev-up:
     desc: Start Postgres and Mailpit for local development.
     cmds:
-      - docker compose -f docker-compose.dev.yml up -d
+      - podman compose -f docker-compose.dev.yml up -d
 
   dev-down:
     desc: Stop the Astro dev daemon (if running) and the dev containers.
     cmds:
       - cd web && pnpm exec astro dev stop || true
-      - docker compose -f docker-compose.dev.yml down
+      - podman compose -f docker-compose.dev.yml down
 
   # --- Frontend (Astro) ---
 
@@ -106,7 +106,7 @@ tasks:
     cmds:
       - |
         for i in $(seq 1 30); do
-          docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U pixelpresent >/dev/null 2>&1 && exit 0
+          podman compose -f docker-compose.dev.yml exec -T postgres pg_isready -U pixelpresent >/dev/null 2>&1 && exit 0
           sleep 1
         done
         echo "postgres did not become ready in time" >&2
