@@ -11,8 +11,17 @@ import {
 } from '../lib/canvas';
 import { EraserIcon, PencilIcon } from './icons';
 
-// Default drawing colour until the palette / colour picker lands (PP-45).
-const DRAW_COLOR = '#fbbf24';
+// The colour the pencil starts on before the user picks another (PP-45).
+const DEFAULT_COLOR = '#fbbf24';
+
+// Curated starter swatches (PP-45): a small warm/retro set for one-tap picks,
+// aligned with the amber accent. The native colour input covers anything else.
+const SWATCHES = [
+  '#000000', '#ffffff', '#9ca3af', '#6d4c41',
+  '#ef4444', '#f97316', '#fbbf24', '#facc15',
+  '#22c55e', '#10b981', '#06b6d4', '#3b82f6',
+  '#6366f1', '#a855f7', '#ec4899', '#f9a8d4',
+];
 
 // Active drawing tool. Pencil paints the current colour; eraser clears cells
 // back to EMPTY. Both share the same pointer interaction (PP-44).
@@ -44,6 +53,7 @@ export default function Editor() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [tool, setTool] = useState<Tool>('pencil');
+  const [color, setColor] = useState(DEFAULT_COLOR);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -56,6 +66,19 @@ export default function Editor() {
   useEffect(() => {
     toolRef.current = tool;
   }, [tool]);
+  // Same trick for the active colour: the pencil reads it from a ref so changing
+  // colour never rebinds the pointer listeners.
+  const colorRef = useRef<string>(color);
+  useEffect(() => {
+    colorRef.current = color;
+  }, [color]);
+
+  // Picking a colour (swatch or custom) selects it and switches to the pencil —
+  // choosing a colour implies you want to draw with it, not erase.
+  function pickColor(hex: string) {
+    setColor(hex);
+    setTool('pencil');
+  }
 
   useEffect(() => {
     const id = giftIdFromURL();
@@ -126,7 +149,7 @@ export default function Editor() {
     let last: { x: number; y: number } | null = null;
 
     function paint(from: { x: number; y: number }, to: { x: number; y: number }) {
-      const ink = toolRef.current === 'eraser' ? EMPTY : colorIndex(model, DRAW_COLOR);
+      const ink = toolRef.current === 'eraser' ? EMPTY : colorIndex(model, colorRef.current);
       paintLine(model, from.x, from.y, to.x, to.y, ink);
       if (ctx) render(ctx, model, cellSize);
     }
@@ -209,8 +232,8 @@ export default function Editor() {
             zoom (PP-48) and selectable sizes (PP-49) come later. */}
         <section class="flex flex-col items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
           {/* Tool bar. Pencil and eraser share the same drawing interaction; the
-              eraser clears cells back to empty (PP-44). More tools land in
-              PP-45+ (colour picker, fill…). */}
+              eraser clears cells back to empty (PP-44). The fill tool lands in
+              PP-46. */}
           <div class="flex gap-2 self-start" role="toolbar" aria-label="Herramientas de dibujo">
             <button
               type="button"
@@ -239,6 +262,40 @@ export default function Editor() {
               Borrador
             </button>
           </div>
+
+          {/* Colour picker (PP-45): curated swatches for quick picks plus a
+              native input for anything else. The chosen colour drives the
+              pencil; picking one switches away from the eraser. */}
+          <div class="flex flex-col gap-2 self-start">
+            <div class="flex flex-wrap gap-1.5" role="group" aria-label="Colores">
+              {SWATCHES.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  onClick={() => pickColor(hex)}
+                  aria-label={`Color ${hex}`}
+                  aria-pressed={color === hex}
+                  class={`h-6 w-6 rounded border transition ${
+                    color === hex
+                      ? 'border-white ring-2 ring-amber-400'
+                      : 'border-white/20 hover:border-white/50'
+                  }`}
+                  style={{ backgroundColor: hex }}
+                />
+              ))}
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+              Personalizado
+              <input
+                type="color"
+                value={color}
+                onInput={(event) => pickColor(event.currentTarget.value)}
+                aria-label="Elegir un color personalizado"
+                class="h-8 w-12 cursor-pointer rounded border border-white/15 bg-transparent"
+              />
+            </label>
+          </div>
+
           <div ref={boardRef} class="w-full max-w-lg">
             <canvas ref={canvasRef} class="mx-auto block cursor-crosshair touch-none" />
           </div>
