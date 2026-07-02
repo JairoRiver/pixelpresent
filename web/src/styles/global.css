@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+/* Class-based dark mode (PP-44.5): `dark:` variants apply when an ancestor has
+   the `.dark` class, which Layout.astro toggles on <html>. This replaces
+   Tailwind's default prefers-color-scheme strategy so the theme is user-driven. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Canvas surface colours, read by the editor's render (canvas.ts) via
+   getComputedStyle. They flip with the theme so empty/erased cells follow it:
+   white on light, slate on dark, each with grid lines that stay visible. */
+:root {
+  --canvas-empty: #ffffff;
+  --canvas-grid: rgba(0, 0, 0, 0.12);
+}
+
+.dark {
+  --canvas-empty: #1e293b;
+  --canvas-grid: rgba(255, 255, 255, 0.10);
+}

@@ -2,21 +2,23 @@
 import Layout from '../layouts/Layout.astro';
 import DashboardGifts from '../components/DashboardGifts.tsx';
 import LogoutButton from '../components/LogoutButton.tsx';
+import ThemeToggle from '../components/ThemeToggle.tsx';
 ---
 
 <Layout title="Tus regalos — Pixel Present">
   <main class="mx-auto max-w-5xl px-6 py-10">
     <header class="mb-8 flex items-end justify-between gap-4">
       <div>
-        <a href="/" class="font-mono text-xs font-bold tracking-widest text-amber-300">
+        <a href="/" class="font-mono text-xs font-bold tracking-widest text-amber-600 dark:text-amber-300">
           PIXEL&nbsp;PRESENT
         </a>
         <h1 class="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Tus regalos</h1>
       </div>
       <div class="flex shrink-0 items-center gap-4">
+        <ThemeToggle client:load />
         <LogoutButton
           client:load
-          class="text-sm font-medium text-slate-400 transition hover:text-white"
+          class="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
         />
         <a
           href="/editor"

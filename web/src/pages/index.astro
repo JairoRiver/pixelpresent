@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import AuthError from '../components/AuthError.tsx';
 import AuthLink from '../components/AuthLink.tsx';
+import ThemeToggle from '../components/ThemeToggle.tsx';
 
 // Value-proposition pillars (pixel_present.md §3). Emojis are decorative.
 const pillars = [
@@ -29,29 +30,32 @@ const pillars = [
     <AuthError client:load />
 
     <header class="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-      <span class="font-mono text-sm font-bold tracking-widest text-amber-300">
+      <span class="font-mono text-sm font-bold tracking-widest text-amber-600 dark:text-amber-300">
         PIXEL&nbsp;PRESENT
       </span>
-      <AuthLink
-        client:load
-        loggedOutHref="/login"
-        loggedOutLabel="Entrar"
-        loggedInHref="/dashboard"
-        loggedInLabel="Tus regalos"
-        class="text-sm font-medium text-slate-300 transition hover:text-white"
-      />
+      <div class="flex items-center gap-4">
+        <AuthLink
+          client:load
+          loggedOutHref="/login"
+          loggedOutLabel="Entrar"
+          loggedInHref="/dashboard"
+          loggedInLabel="Tus regalos"
+          class="text-sm font-medium text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+        />
+        <ThemeToggle client:load />
+      </div>
     </header>
 
     <main class="mx-auto max-w-3xl px-6 pb-24 pt-12 text-center sm:pt-20">
       <p
-        class="mb-4 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 font-mono text-xs uppercase tracking-widest text-amber-200"
+        class="mb-4 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 font-mono text-xs uppercase tracking-widest text-amber-700 dark:text-amber-200"
       >
         Regalos digitales, píxel a píxel
       </p>
       <h1 class="text-balance text-4xl font-extrabold tracking-tight sm:text-6xl">
         Un regalo que no se abre,<br class="hidden sm:inline" /> se descubre.
       </h1>
-      <p class="mx-auto mt-6 max-w-xl text-pretty text-lg text-slate-300">
+      <p class="mx-auto mt-6 max-w-xl text-pretty text-lg text-slate-600 dark:text-slate-300">
         Pixel Present transforma un dibujo sencillo en una sorpresa interactiva,
         dibujada píxel a píxel, para alguien importante.
       </p>
@@ -64,24 +68,27 @@ const pillars = [
           loggedInLabel="Crear un regalo"
           class="rounded-md bg-amber-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-300"
         />
-        <a href="#como" class="text-sm font-medium text-slate-300 transition hover:text-white">
+        <a
+          href="#como"
+          class="text-sm font-medium text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+        >
           Cómo funciona →
         </a>
       </div>
     </main>
 
     <section id="como" class="mx-auto max-w-5xl px-6 pb-24">
-      <h2 class="mb-10 text-center text-sm font-semibold uppercase tracking-widest text-slate-400">
+      <h2 class="mb-10 text-center text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
         Una experiencia de regalo digital con
       </h2>
       <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {
           pillars.map((p) => (
-            <li class="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-6 text-center">
+            <li class="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-slate-100 p-6 text-center dark:border-white/10 dark:bg-white/5">
               <span class="text-3xl" aria-hidden="true">
                 {p.icon}
               </span>
-              <span class="text-sm font-medium text-slate-200">{p.label}</span>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{p.label}</span>
             </li>
           ))
         }
@@ -89,7 +96,7 @@ const pillars = [
     </section>
 
     <section class="mx-auto max-w-3xl px-6 pb-28 text-center">
-      <p class="font-mono text-xl text-amber-200 sm:text-2xl">
+      <p class="font-mono text-xl text-amber-700 sm:text-2xl dark:text-amber-200">
         Dibuja algo pequeño. Regala algo enorme.
       </p>
       <AuthLink
@@ -98,7 +105,7 @@ const pillars = [
         loggedOutLabel="Empezar ahora"
         loggedInHref="/dashboard"
         loggedInLabel="Ir a tus regalos"
-        class="mt-8 inline-block rounded-md border border-amber-400/40 px-6 py-3 font-semibold text-amber-200 transition hover:bg-amber-400/10"
+        class="mt-8 inline-block rounded-md border border-amber-400/40 px-6 py-3 font-semibold text-amber-700 transition hover:bg-amber-400/10 dark:text-amber-200"
       />
     </section>
   </div>

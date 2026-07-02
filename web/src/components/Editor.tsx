@@ -9,8 +9,10 @@ import {
   render,
   sizeCanvas,
   type PixelCanvas,
+  type SurfaceColors,
 } from '../lib/canvas';
 import { EraserIcon, PaintBucketIcon, PencilIcon } from './icons';
+import ThemeToggle from './ThemeToggle';
 
 // The colour the pencil starts on before the user picks another (PP-45).
 const DEFAULT_COLOR = '#fbbf24';
@@ -28,6 +30,30 @@ const SWATCHES = [
 // back to EMPTY — both share the same drag interaction (PP-44). Fill (PP-46)
 // flood-fills the clicked region with the current colour on a single click.
 type Tool = 'pencil' | 'eraser' | 'fill';
+
+// Shared class for a tool-bar button, theme-aware (PP-44.5). Extracted so the
+// three buttons stay identical and the light/dark styling lives in one place.
+function toolButtonClass(active: boolean): string {
+  return `inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+    active
+      ? 'border-amber-500 bg-amber-400/20 text-amber-700 dark:border-amber-400 dark:bg-amber-400/15 dark:text-amber-200'
+      : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30'
+  }`;
+}
+
+// Shared class for the title/message text fields (theme-aware, PP-44.5).
+const FIELD_CLASS =
+  'mt-2 w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500';
+
+// Reads the theme-aware canvas surface colours from the CSS variables that flip
+// with the .dark class (defined in global.css), with light-theme fallbacks.
+function surfaceColors(): SurfaceColors {
+  const s = getComputedStyle(document.documentElement);
+  return {
+    empty: s.getPropertyValue('--canvas-empty').trim() || '#ffffff',
+    grid: s.getPropertyValue('--canvas-grid').trim() || 'rgba(0, 0, 0, 0.12)',
+  };
+}
 
 // Editor is the shell of the gift editor (PP-41). It resolves which gift to work
 // on — an existing one when the URL carries ?id=<uuid>, or a fresh empty one
@@ -128,15 +154,31 @@ export default function Editor() {
     const board: HTMLDivElement = boardRef.current;
     const model = modelRef.current;
 
+    // Theme-aware surface colours, cached so painting doesn't re-read the CSS
+    // variables on every pointer move; refreshed on resize and theme change.
+    let colors = surfaceColors();
     let cellSize = fitCellSize(board.clientWidth, model);
     let ctx = sizeCanvas(canvas, model, cellSize);
-    if (ctx) render(ctx, model, cellSize);
+    if (ctx) render(ctx, model, cellSize, colors);
 
     function redraw() {
+      colors = surfaceColors();
       cellSize = fitCellSize(board.clientWidth, model);
       ctx = sizeCanvas(canvas, model, cellSize);
-      if (ctx) render(ctx, model, cellSize);
+      if (ctx) render(ctx, model, cellSize, colors);
     }
+
+    // Repaint when the theme toggles (the .dark class on <html> changes), so the
+    // empty/erased cells and grid lines follow light/dark without a resize.
+    function onThemeChange() {
+      colors = surfaceColors();
+      if (ctx) render(ctx, model, cellSize, colors);
+    }
+    const themeObserver = new MutationObserver(onThemeChange);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
 
     // Map a pointer position to a grid cell, or null if outside the grid.
     function cellFromEvent(event: PointerEvent): { x: number; y: number } | null {
@@ -153,7 +195,7 @@ export default function Editor() {
     function paint(from: { x: number; y: number }, to: { x: number; y: number }) {
       const ink = toolRef.current === 'eraser' ? EMPTY : colorIndex(model, colorRef.current);
       paintLine(model, from.x, from.y, to.x, to.y, ink);
-      if (ctx) render(ctx, model, cellSize);
+      if (ctx) render(ctx, model, cellSize, colors);
     }
 
     function onPointerDown(event: PointerEvent) {
@@ -163,7 +205,7 @@ export default function Editor() {
       // false, so the move handler below is a no-op for this gesture).
       if (toolRef.current === 'fill') {
         floodFill(model, cell.x, cell.y, colorIndex(model, colorRef.current));
-        if (ctx) render(ctx, model, cellSize);
+        if (ctx) render(ctx, model, cellSize, colors);
         return;
       }
       drawing = true;
@@ -199,19 +241,26 @@ export default function Editor() {
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('resize', redraw);
+      themeObserver.disconnect();
     };
   }, [status]);
 
   if (status === 'loading') {
-    return <p class="px-6 py-10 text-slate-400">Cargando el editor…</p>;
+    return <p class="px-6 py-10 text-slate-500 dark:text-slate-400">Cargando el editor…</p>;
   }
 
   if (status === 'notfound') {
     return (
       <div class="px-6 py-10">
-        <p class="text-slate-300">
+        <p class="text-slate-600 dark:text-slate-300">
           Ese regalo no existe o no es tuyo.{' '}
-          <a href="/dashboard" class="text-amber-300 hover:text-amber-200">Volver a tus regalos</a>.
+          <a
+            href="/dashboard"
+            class="text-amber-600 hover:text-amber-500 dark:text-amber-300 dark:hover:text-amber-200"
+          >
+            Volver a tus regalos
+          </a>
+          .
         </p>
       </div>
     );
@@ -220,7 +269,7 @@ export default function Editor() {
   if (status === 'error') {
     return (
       <div class="px-6 py-10">
-        <p class="text-rose-300" role="alert">
+        <p class="text-rose-600 dark:text-rose-300" role="alert">
           No hemos podido cargar el regalo. Inténtalo de nuevo en un momento.
         </p>
       </div>
@@ -229,17 +278,23 @@ export default function Editor() {
 
   return (
     <div class="flex min-h-screen flex-col">
-      <header class="flex items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
-        <a href="/dashboard" class="font-mono text-xs font-bold tracking-widest text-amber-300">
+      <header class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-white/10">
+        <a
+          href="/dashboard"
+          class="font-mono text-xs font-bold tracking-widest text-amber-600 dark:text-amber-300"
+        >
           ← PIXEL&nbsp;PRESENT
         </a>
-        <span class="text-sm text-slate-400">Editor</span>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-500 dark:text-slate-400">Editor</span>
+          <ThemeToggle />
+        </div>
       </header>
 
       <div class="grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[1fr_20rem]">
         {/* Canvas area. The board fits its container width (responsive/mobile);
             zoom (PP-48) and selectable sizes (PP-49) come later. */}
-        <section class="flex flex-col items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+        <section class="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-white/10 dark:bg-white/5">
           {/* Tool bar. Pencil and eraser share the same drag interaction; the
               eraser clears cells back to empty (PP-44). Fill (PP-46) flood-fills
               the clicked region with the current colour. */}
@@ -248,11 +303,7 @@ export default function Editor() {
               type="button"
               onClick={() => setTool('pencil')}
               aria-pressed={tool === 'pencil'}
-              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                tool === 'pencil'
-                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
-                  : 'border-white/15 text-slate-300 hover:border-white/30'
-              }`}
+              class={toolButtonClass(tool === 'pencil')}
             >
               <PencilIcon class="h-4 w-4" />
               Lápiz
@@ -261,11 +312,7 @@ export default function Editor() {
               type="button"
               onClick={() => setTool('eraser')}
               aria-pressed={tool === 'eraser'}
-              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                tool === 'eraser'
-                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
-                  : 'border-white/15 text-slate-300 hover:border-white/30'
-              }`}
+              class={toolButtonClass(tool === 'eraser')}
             >
               <EraserIcon class="h-4 w-4" />
               Borrador
@@ -274,11 +321,7 @@ export default function Editor() {
               type="button"
               onClick={() => setTool('fill')}
               aria-pressed={tool === 'fill'}
-              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                tool === 'fill'
-                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
-                  : 'border-white/15 text-slate-300 hover:border-white/30'
-              }`}
+              class={toolButtonClass(tool === 'fill')}
             >
               <PaintBucketIcon class="h-4 w-4" />
               Relleno
@@ -299,21 +342,21 @@ export default function Editor() {
                   aria-pressed={color === hex}
                   class={`h-6 w-6 rounded border transition ${
                     color === hex
-                      ? 'border-white ring-2 ring-amber-400'
-                      : 'border-white/20 hover:border-white/50'
+                      ? 'border-slate-900 ring-2 ring-amber-500 dark:border-white dark:ring-amber-400'
+                      : 'border-slate-300 hover:border-slate-500 dark:border-white/20 dark:hover:border-white/50'
                   }`}
                   style={{ backgroundColor: hex }}
                 />
               ))}
             </div>
-            <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
               Personalizado
               <input
                 type="color"
                 value={color}
                 onInput={(event) => pickColor(event.currentTarget.value)}
                 aria-label="Elegir un color personalizado"
-                class="h-8 w-12 cursor-pointer rounded border border-white/15 bg-transparent"
+                class="h-8 w-12 cursor-pointer rounded border border-slate-300 bg-transparent dark:border-white/15"
               />
             </label>
           </div>
@@ -326,25 +369,25 @@ export default function Editor() {
         {/* Side panel — gift metadata. */}
         <aside class="space-y-4">
           <div>
-            <label for="gift-title" class="block text-sm font-medium text-slate-300">Título</label>
+            <label for="gift-title" class="block text-sm font-medium text-slate-600 dark:text-slate-300">Título</label>
             <input
               id="gift-title"
               type="text"
               value={title}
               onInput={(event) => setTitle(event.currentTarget.value)}
               placeholder="Para alguien especial"
-              class="mt-2 w-full rounded-md border border-white/15 bg-white/5 px-4 py-2 text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none"
+              class={FIELD_CLASS}
             />
           </div>
           <div>
-            <label for="gift-message" class="block text-sm font-medium text-slate-300">Mensaje</label>
+            <label for="gift-message" class="block text-sm font-medium text-slate-600 dark:text-slate-300">Mensaje</label>
             <textarea
               id="gift-message"
               value={message}
               onInput={(event) => setMessage(event.currentTarget.value)}
               rows={4}
               placeholder="El mensaje que se revela al abrir el regalo"
-              class="mt-2 w-full rounded-md border border-white/15 bg-white/5 px-4 py-2 text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none"
+              class={FIELD_CLASS}
             />
           </div>
         </aside>

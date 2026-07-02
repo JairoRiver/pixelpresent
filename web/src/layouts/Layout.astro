@@ -17,8 +17,21 @@ const { title = 'Pixel Present' } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    {/* Apply the theme before first paint to avoid a flash of the wrong theme.
+        Uses the saved choice (pp_session-style key pp_theme) or falls back to the
+        OS preference, defaulting to dark unless the system explicitly asks light. */}
+    <script is:inline>
+      (() => {
+        const saved = localStorage.getItem('pp_theme');
+        const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+        const dark = saved ? saved === 'dark' : !prefersLight;
+        document.documentElement.classList.toggle('dark', dark);
+      })();
+    </script>
   </head>
-  <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <body
+    class="min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100"
+  >
     <slot />
   </body>
 </html>

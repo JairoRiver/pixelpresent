@@ -21,7 +21,7 @@ export default function AuthError() {
   return (
     <div
       role="alert"
-      class="mx-auto mt-4 flex max-w-2xl items-center justify-between gap-4 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+      class="mx-auto mt-4 flex max-w-2xl items-center justify-between gap-4 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-200"
     >
       <span>
         Ese enlace no es válido o ha caducado.{' '}
@@ -31,7 +31,7 @@ export default function AuthError() {
         type="button"
         aria-label="Cerrar"
         onClick={() => setVisible(false)}
-        class="shrink-0 text-rose-300 transition hover:text-white"
+        class="shrink-0 text-rose-500 transition hover:text-rose-700 dark:text-rose-300 dark:hover:text-white"
       >
         ✕
       </button>

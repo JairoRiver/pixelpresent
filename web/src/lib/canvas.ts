@@ -122,8 +122,21 @@ export function floodFill(model: PixelCanvas, x: number, y: number, value: numbe
   }
 }
 
-const GRID_LINE = 'rgba(255, 255, 255, 0.08)';
-const EMPTY_CELL = 'rgba(255, 255, 255, 0.02)';
+// Surface colours for the drawing area (PP-44.5). They are theme-aware: the
+// editor reads them from CSS variables (--canvas-empty / --canvas-grid, defined
+// in global.css) so empty/erased cells and grid lines follow the light/dark
+// theme. These constants are only the light-theme fallback when no colours are
+// passed. Painting an EMPTY cell is purely visual; EMPTY still means transparent
+// in the saved pixel_art.
+export interface SurfaceColors {
+  empty: string; // fill for EMPTY cells (the canvas background)
+  grid: string; // grid line colour
+}
+
+const DEFAULT_COLORS: SurfaceColors = {
+  empty: '#ffffff',
+  grid: 'rgba(0, 0, 0, 0.12)',
+};
 
 // sizeCanvas sets the backing-store resolution to match the grid and the device
 // pixel ratio (crisp on retina / mobile), while keeping the CSS size at
@@ -151,11 +164,12 @@ export function sizeCanvas(
 
 // render redraws the whole grid, one fillRect per cell. Even at the 128×128
 // maximum this is effectively instant, so there is no partial redraw. Empty
-// cells get a faint fill plus grid lines so the empty grid is visible.
+// cells are painted with the surface colour (theme-aware) and grid lines on top.
 export function render(
   ctx: CanvasRenderingContext2D,
   model: PixelCanvas,
   cellSize: number,
+  colors: SurfaceColors = DEFAULT_COLORS,
 ): void {
   const { width, height, palette, pixels } = model;
 
@@ -164,13 +178,13 @@ export function render(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const value = pixels[y * width + x];
-      ctx.fillStyle = value === EMPTY ? EMPTY_CELL : palette[value];
+      ctx.fillStyle = value === EMPTY ? colors.empty : palette[value];
       ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     }
   }
 
   // Grid lines on top, aligned to cell boundaries (0.5 offset keeps 1px crisp).
-  ctx.strokeStyle = GRID_LINE;
+  ctx.strokeStyle = colors.grid;
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 0; x <= width; x++) {

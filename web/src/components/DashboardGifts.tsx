@@ -62,18 +62,22 @@ export default function DashboardGifts() {
   }, []);
 
   if (state.kind === 'loading') {
-    return <p class="text-slate-400">Cargando tus regalos…</p>;
+    return <p class="text-slate-500 dark:text-slate-400">Cargando tus regalos…</p>;
   }
 
   if (state.kind === 'error') {
-    return <p class="text-rose-300">No hemos podido cargar tus regalos. Recarga la página.</p>;
+    return (
+      <p class="text-rose-600 dark:text-rose-300">
+        No hemos podido cargar tus regalos. Recarga la página.
+      </p>
+    );
   }
 
   if (state.gifts.length === 0) {
     return (
-      <div class="rounded-xl border border-white/10 bg-white/5 p-10 text-center">
-        <p class="text-lg text-slate-200">Aún no tienes regalos.</p>
-        <p class="mt-2 text-slate-400">Crea el primero, píxel a píxel.</p>
+      <div class="rounded-xl border border-slate-200 bg-slate-100 p-10 text-center dark:border-white/10 dark:bg-white/5">
+        <p class="text-lg text-slate-700 dark:text-slate-200">Aún no tienes regalos.</p>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">Crea el primero, píxel a píxel.</p>
         <a
           href="/editor"
           class="mt-6 inline-block rounded-md bg-amber-400 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-amber-300"
@@ -87,21 +91,27 @@ export default function DashboardGifts() {
   return (
     <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {state.gifts.map((gift) => (
-        <li class="rounded-xl border border-white/10 bg-white/5 p-5">
+        <li class="rounded-xl border border-slate-200 bg-slate-100 p-5 dark:border-white/10 dark:bg-white/5">
           <div class="flex items-start justify-between gap-3">
-            <h3 class="font-semibold text-slate-100">{gift.title}</h3>
-            <span class="shrink-0 rounded-full bg-amber-400/10 px-2 py-0.5 font-mono text-xs text-amber-200">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100">{gift.title}</h3>
+            <span class="shrink-0 rounded-full bg-amber-400/10 px-2 py-0.5 font-mono text-xs text-amber-700 dark:text-amber-200">
               {gift.reveal_type}
             </span>
           </div>
-          <p class="mt-2 text-xs text-slate-400">
+          <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
             {statusLabel(gift)} · creado el {formatDate(gift.created_at)}
           </p>
           <div class="mt-4 flex items-center gap-4 text-sm">
-            <a href={`/editor?id=${gift.id}`} class="font-medium text-amber-300 hover:text-amber-200">
+            <a
+              href={`/editor?id=${gift.id}`}
+              class="font-medium text-amber-600 hover:text-amber-500 dark:text-amber-300 dark:hover:text-amber-200"
+            >
               Editar
             </a>
-            <a href={`/g/${gift.view_token}`} class="text-slate-300 hover:text-white">
+            <a
+              href={`/g/${gift.view_token}`}
+              class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
               Ver regalo →
             </a>
           </div>

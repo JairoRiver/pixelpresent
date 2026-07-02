@@ -48,12 +48,12 @@ export default function MagicLinkForm() {
   }
 
   if (status === 'checking') {
-    return <p class="text-slate-400">Cargando…</p>;
+    return <p class="text-slate-500 dark:text-slate-400">Cargando…</p>;
   }
 
   if (status === 'sent') {
     return (
-      <p class="text-amber-200" role="status">
+      <p class="text-amber-700 dark:text-amber-200" role="status">
         Te hemos enviado un enlace a <strong>{email.trim()}</strong>. Revisa tu correo para entrar.
       </p>
     );
@@ -68,7 +68,7 @@ export default function MagicLinkForm() {
       }}
     >
       <div>
-        <label for="email" class="block text-sm font-medium text-slate-300">Email</label>
+        <label for="email" class="block text-sm font-medium text-slate-600 dark:text-slate-300">Email</label>
         <input
           id="email"
           name="email"
@@ -78,7 +78,7 @@ export default function MagicLinkForm() {
           placeholder="tu@email.com"
           value={email}
           onInput={(event) => setEmail(event.currentTarget.value)}
-          class="mt-2 w-full rounded-md border border-white/15 bg-white/5 px-4 py-3 text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none"
+          class="mt-2 w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </div>
       <button
@@ -89,7 +89,7 @@ export default function MagicLinkForm() {
         {status === 'sending' ? 'Enviando…' : 'Enviar enlace de acceso'}
       </button>
       {status === 'error' && (
-        <p class="text-sm text-rose-300" role="alert">{error}</p>
+        <p class="text-sm text-rose-600 dark:text-rose-300" role="alert">{error}</p>
       )}
     </form>
   );

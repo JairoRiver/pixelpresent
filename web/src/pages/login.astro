@@ -1,16 +1,20 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import MagicLinkForm from '../components/MagicLinkForm.tsx';
+import ThemeToggle from '../components/ThemeToggle.tsx';
 ---
 
 <Layout title="Entrar — Pixel Present">
   <main class="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
-    <a href="/" class="mb-8 font-mono text-sm font-bold tracking-widest text-amber-300">
-      ← PIXEL&nbsp;PRESENT
-    </a>
+    <div class="mb-8 flex items-center justify-between gap-4">
+      <a href="/" class="font-mono text-sm font-bold tracking-widest text-amber-600 dark:text-amber-300">
+        ← PIXEL&nbsp;PRESENT
+      </a>
+      <ThemeToggle client:load />
+    </div>
 
     <h1 class="text-3xl font-extrabold tracking-tight sm:text-4xl">Entra o crea tu cuenta</h1>
-    <p class="mt-3 mb-8 text-slate-300">
+    <p class="mt-3 mb-8 text-slate-600 dark:text-slate-300">
       Sin contraseñas. Escribe tu email y te enviamos un enlace de acceso; si es la
       primera vez, te creamos la cuenta automáticamente.
     </p>
