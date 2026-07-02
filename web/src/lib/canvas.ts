@@ -95,6 +95,33 @@ export function paintLine(
   }
 }
 
+// floodFill replaces the 4-connected region of same-valued cells starting at
+// (x, y) with value — the classic bucket fill. It uses an explicit stack (DFS)
+// so a large uniform region can't blow the call stack. The `target === value`
+// guard makes filling a region with its own colour a no-op, which also prevents
+// an infinite loop; filling a grid that is entirely one value fills all of it.
+export function floodFill(model: PixelCanvas, x: number, y: number, value: number): void {
+  const { width, height, pixels } = model;
+  if (x < 0 || y < 0 || x >= width || y >= height) return;
+
+  const target = pixels[y * width + x];
+  if (target === value) return;
+
+  const stack: number[] = [y * width + x];
+  while (stack.length > 0) {
+    const idx = stack.pop() as number;
+    if (pixels[idx] !== target) continue;
+    pixels[idx] = value;
+
+    const cx = idx % width;
+    const cy = (idx - cx) / width;
+    if (cx + 1 < width) stack.push(idx + 1);
+    if (cx - 1 >= 0) stack.push(idx - 1);
+    if (cy + 1 < height) stack.push(idx + width);
+    if (cy - 1 >= 0) stack.push(idx - width);
+  }
+}
+
 const GRID_LINE = 'rgba(255, 255, 255, 0.08)';
 const EMPTY_CELL = 'rgba(255, 255, 255, 0.02)';
 

@@ -4,12 +4,13 @@ import {
   createCanvas,
   EMPTY,
   fitCellSize,
+  floodFill,
   paintLine,
   render,
   sizeCanvas,
   type PixelCanvas,
 } from '../lib/canvas';
-import { EraserIcon, PencilIcon } from './icons';
+import { EraserIcon, PaintBucketIcon, PencilIcon } from './icons';
 
 // The colour the pencil starts on before the user picks another (PP-45).
 const DEFAULT_COLOR = '#fbbf24';
@@ -23,9 +24,10 @@ const SWATCHES = [
   '#6366f1', '#a855f7', '#ec4899', '#f9a8d4',
 ];
 
-// Active drawing tool. Pencil paints the current colour; eraser clears cells
-// back to EMPTY. Both share the same pointer interaction (PP-44).
-type Tool = 'pencil' | 'eraser';
+// Active drawing tool. Pencil paints the current colour and eraser clears cells
+// back to EMPTY — both share the same drag interaction (PP-44). Fill (PP-46)
+// flood-fills the clicked region with the current colour on a single click.
+type Tool = 'pencil' | 'eraser' | 'fill';
 
 // Editor is the shell of the gift editor (PP-41). It resolves which gift to work
 // on — an existing one when the URL carries ?id=<uuid>, or a fresh empty one
@@ -157,6 +159,13 @@ export default function Editor() {
     function onPointerDown(event: PointerEvent) {
       const cell = cellFromEvent(event);
       if (!cell) return;
+      // Fill is a one-shot click, not a drag: flood-fill and stop (drawing stays
+      // false, so the move handler below is a no-op for this gesture).
+      if (toolRef.current === 'fill') {
+        floodFill(model, cell.x, cell.y, colorIndex(model, colorRef.current));
+        if (ctx) render(ctx, model, cellSize);
+        return;
+      }
       drawing = true;
       last = cell;
       canvas.setPointerCapture(event.pointerId);
@@ -231,9 +240,9 @@ export default function Editor() {
         {/* Canvas area. The board fits its container width (responsive/mobile);
             zoom (PP-48) and selectable sizes (PP-49) come later. */}
         <section class="flex flex-col items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
-          {/* Tool bar. Pencil and eraser share the same drawing interaction; the
-              eraser clears cells back to empty (PP-44). The fill tool lands in
-              PP-46. */}
+          {/* Tool bar. Pencil and eraser share the same drag interaction; the
+              eraser clears cells back to empty (PP-44). Fill (PP-46) flood-fills
+              the clicked region with the current colour. */}
           <div class="flex gap-2 self-start" role="toolbar" aria-label="Herramientas de dibujo">
             <button
               type="button"
@@ -260,6 +269,19 @@ export default function Editor() {
             >
               <EraserIcon class="h-4 w-4" />
               Borrador
+            </button>
+            <button
+              type="button"
+              onClick={() => setTool('fill')}
+              aria-pressed={tool === 'fill'}
+              class={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                tool === 'fill'
+                  ? 'border-amber-400 bg-amber-400/15 text-amber-200'
+                  : 'border-white/15 text-slate-300 hover:border-white/30'
+              }`}
+            >
+              <PaintBucketIcon class="h-4 w-4" />
+              Relleno
             </button>
           </div>
 
