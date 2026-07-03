@@ -22,6 +22,20 @@ const DEFAULT_COLOR = '#fbbf24';
 // in memory (architecture §editor) while covering any realistic stroke history.
 const HISTORY_LIMIT = 50;
 
+// Zoom (PP-48): a multiplier over the fit-to-width cell size, so 100% keeps the
+// existing responsive behaviour and zooming in/out just scales cellSize and
+// redraws (architecture §editor: "cellSize controla el zoom"). Panning a grid
+// too big to fit is a separate task (PP-50); here the board simply scrolls.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.25;
+
+// Rounds a zoom factor to 2 decimals so repeated ±0.25 steps don't drift into
+// float noise (e.g. 0.7500000001) in the percentage label.
+function roundZoom(z: number): number {
+  return Math.round(z * 100) / 100;
+}
+
 // Curated starter swatches (PP-45): a small warm/retro set for one-tap picks,
 // aligned with the amber accent. The native colour input covers anything else.
 const SWATCHES = [
@@ -87,6 +101,7 @@ export default function Editor() {
   const [message, setMessage] = useState('');
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [zoom, setZoom] = useState(1);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -105,6 +120,26 @@ export default function Editor() {
   useEffect(() => {
     colorRef.current = color;
   }, [color]);
+
+  // Zoom factor mirrored into a ref so the drawing effect reads the current
+  // value without rebinding, plus a redraw hook the effect fills in: changing
+  // zoom recomputes cellSize and re-sizes the canvas (PP-48).
+  const zoomRef = useRef<number>(zoom);
+  const redrawRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    zoomRef.current = zoom;
+    redrawRef.current();
+  }, [zoom]);
+
+  function zoomIn() {
+    setZoom((z) => Math.min(ZOOM_MAX, roundZoom(z + ZOOM_STEP)));
+  }
+  function zoomOut() {
+    setZoom((z) => Math.max(ZOOM_MIN, roundZoom(z - ZOOM_STEP)));
+  }
+  function resetZoom() {
+    setZoom(1);
+  }
 
   // Undo/redo history (PP-47): each stack holds full copies of `pixels` (not the
   // palette, which only ever grows). A discrete action pushes the pre-mutation
@@ -206,19 +241,28 @@ export default function Editor() {
     const board: HTMLDivElement = boardRef.current;
     const model = modelRef.current;
 
+    // Effective cell size = fit-to-width base × zoom (PP-48). At zoom 1 this is
+    // the plain responsive fit; zooming in makes the canvas overflow the board,
+    // which scrolls. Never smaller than 1px so the grid stays valid.
+    function computeCellSize(): number {
+      return Math.max(1, Math.round(fitCellSize(board.clientWidth, model) * zoomRef.current));
+    }
+
     // Theme-aware surface colours, cached so painting doesn't re-read the CSS
     // variables on every pointer move; refreshed on resize and theme change.
     let colors = surfaceColors();
-    let cellSize = fitCellSize(board.clientWidth, model);
+    let cellSize = computeCellSize();
     let ctx = sizeCanvas(canvas, model, cellSize);
     if (ctx) render(ctx, model, cellSize, colors);
 
     function redraw() {
       colors = surfaceColors();
-      cellSize = fitCellSize(board.clientWidth, model);
+      cellSize = computeCellSize();
       ctx = sizeCanvas(canvas, model, cellSize);
       if (ctx) render(ctx, model, cellSize, colors);
     }
+    // Let the zoom control (outside this effect) re-size and repaint on change.
+    redrawRef.current = redraw;
 
     // Let undo/redo (defined outside this effect) repaint the current model
     // without owning the canvas context, cell size or colours.
@@ -374,8 +418,9 @@ export default function Editor() {
       </header>
 
       <div class="grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[1fr_20rem]">
-        {/* Canvas area. The board fits its container width (responsive/mobile);
-            zoom (PP-48) and selectable sizes (PP-49) come later. */}
+        {/* Canvas area. The board fits its container width (responsive/mobile)
+            and zoom (PP-48) scales from there; selectable sizes (PP-49) come
+            later. */}
         <section class="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-white/10 dark:bg-white/5">
           {/* Tool bar. Pencil and eraser share the same drag interaction; the
               eraser clears cells back to empty (PP-44). Fill (PP-46) flood-fills
@@ -468,7 +513,42 @@ export default function Editor() {
             </label>
           </div>
 
-          <div ref={boardRef} class="w-full max-w-lg">
+          {/* Zoom control (PP-48): scales cellSize and redraws. The percentage
+              doubles as a reset-to-100% button; the buttons disable at the
+              limits. Panning a zoomed-in grid by touch is a later task (PP-50). */}
+          <div class="flex items-center gap-2 self-start" role="group" aria-label="Zoom">
+            <span class="text-sm text-slate-600 dark:text-slate-300">Zoom</span>
+            <button
+              type="button"
+              onClick={zoomOut}
+              disabled={zoom <= ZOOM_MIN}
+              aria-label="Alejar"
+              class={`${toolButtonClass(false)} px-2.5 disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={resetZoom}
+              aria-label="Restablecer zoom al 100%"
+              class="min-w-[3.25rem] rounded-md px-2 py-1.5 text-center text-sm tabular-nums text-slate-600 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-300"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={zoomIn}
+              disabled={zoom >= ZOOM_MAX}
+              aria-label="Acercar"
+              class={`${toolButtonClass(false)} px-2.5 disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              +
+            </button>
+          </div>
+
+          {/* The board is the measured container (its width drives the fit-to-
+              width base); it scrolls when zoom makes the canvas overflow. */}
+          <div ref={boardRef} class="max-h-[70vh] w-full max-w-lg overflow-auto">
             <canvas ref={canvasRef} class="mx-auto block cursor-crosshair touch-none" />
           </div>
         </section>
