@@ -11,11 +11,16 @@ import {
   type PixelCanvas,
   type SurfaceColors,
 } from '../lib/canvas';
-import { EraserIcon, PaintBucketIcon, PencilIcon } from './icons';
+import { EraserIcon, PaintBucketIcon, PencilIcon, RedoIcon, UndoIcon } from './icons';
 import ThemeToggle from './ThemeToggle';
 
 // The colour the pencil starts on before the user picks another (PP-45).
 const DEFAULT_COLOR = '#fbbf24';
+
+// Undo/redo depth (PP-47): a full snapshot of the pixels array per discrete
+// action. At the 128×128 maximum each snapshot is 16KB, so 50 steps is trivial
+// in memory (architecture §editor) while covering any realistic stroke history.
+const HISTORY_LIMIT = 50;
 
 // Curated starter swatches (PP-45): a small warm/retro set for one-tap picks,
 // aligned with the amber accent. The native colour input covers anything else.
@@ -101,6 +106,53 @@ export default function Editor() {
     colorRef.current = color;
   }, [color]);
 
+  // Undo/redo history (PP-47): each stack holds full copies of `pixels` (not the
+  // palette, which only ever grows). A discrete action pushes the pre-mutation
+  // snapshot; undo/redo swap the live pixels for a snapshot and repaint. The
+  // stacks live in refs so the pointer closures below never rebind, while
+  // canUndo/canRedo mirror their emptiness into state to drive the buttons.
+  const undoStackRef = useRef<Uint8Array[]>([]);
+  const redoStackRef = useRef<Uint8Array[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  // Set by the drawing effect to repaint the current model; called by undo/redo
+  // (which run outside the effect) so they don't need the canvas context.
+  const repaintRef = useRef<() => void>(() => {});
+
+  function syncHistory() {
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(redoStackRef.current.length > 0);
+  }
+
+  // Snapshot the pixels *before* a discrete action mutates them, and drop the
+  // redo branch (a new action invalidates any undone future). Trims the oldest
+  // step once the stack passes the limit.
+  function pushHistory() {
+    const stack = undoStackRef.current;
+    stack.push(modelRef.current.pixels.slice());
+    if (stack.length > HISTORY_LIMIT) stack.shift();
+    redoStackRef.current = [];
+    syncHistory();
+  }
+
+  function undo() {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    redoStackRef.current.push(modelRef.current.pixels.slice());
+    modelRef.current.pixels = stack.pop() as Uint8Array;
+    repaintRef.current();
+    syncHistory();
+  }
+
+  function redo() {
+    const stack = redoStackRef.current;
+    if (stack.length === 0) return;
+    undoStackRef.current.push(modelRef.current.pixels.slice());
+    modelRef.current.pixels = stack.pop() as Uint8Array;
+    repaintRef.current();
+    syncHistory();
+  }
+
   // Picking a colour (swatch or custom) selects it and switches to the pencil —
   // choosing a colour implies you want to draw with it, not erase.
   function pickColor(hex: string) {
@@ -168,6 +220,12 @@ export default function Editor() {
       if (ctx) render(ctx, model, cellSize, colors);
     }
 
+    // Let undo/redo (defined outside this effect) repaint the current model
+    // without owning the canvas context, cell size or colours.
+    repaintRef.current = () => {
+      if (ctx) render(ctx, model, cellSize, colors);
+    };
+
     // Repaint when the theme toggles (the .dark class on <html> changes), so the
     // empty/erased cells and grid lines follow light/dark without a resize.
     function onThemeChange() {
@@ -201,6 +259,9 @@ export default function Editor() {
     function onPointerDown(event: PointerEvent) {
       const cell = cellFromEvent(event);
       if (!cell) return;
+      // A discrete action begins here: snapshot the pixels before mutating so the
+      // whole gesture (a drag, or a single fill) undoes as one step (PP-47).
+      pushHistory();
       // Fill is a one-shot click, not a drag: flood-fill and stop (drawing stays
       // false, so the move handler below is a no-op for this gesture).
       if (toolRef.current === 'fill') {
@@ -230,17 +291,38 @@ export default function Editor() {
       }
     }
 
+    // Keyboard shortcuts: Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y
+    // redoes — the platform-standard bindings for undo/redo (PP-47). Ignore key
+    // repeat so a held-down combo doesn't blow through the whole history.
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.repeat) return;
+      // Don't hijack the native undo of the title/message text fields.
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        redo();
+      }
+    }
+
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
     window.addEventListener('resize', redraw);
+    window.addEventListener('keydown', onKeyDown);
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('resize', redraw);
+      window.removeEventListener('keydown', onKeyDown);
       themeObserver.disconnect();
     };
   }, [status]);
@@ -325,6 +407,31 @@ export default function Editor() {
             >
               <PaintBucketIcon class="h-4 w-4" />
               Relleno
+            </button>
+
+            {/* Undo/redo (PP-47): action buttons, not tools, so no aria-pressed.
+                Disabled when their history stack is empty; Ctrl/Cmd+Z and
+                Ctrl/Cmd+Shift+Z (or +Y) do the same from the keyboard. */}
+            <span class="mx-1 w-px self-stretch bg-slate-300 dark:bg-white/15" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              aria-label="Deshacer"
+              class={`${toolButtonClass(false)} disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <UndoIcon class="h-4 w-4" />
+              Deshacer
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              aria-label="Rehacer"
+              class={`${toolButtonClass(false)} disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <RedoIcon class="h-4 w-4" />
+              Rehacer
             </button>
           </div>
 
