@@ -109,6 +109,7 @@ interface GiftData {
   pixel_art: unknown;
   reveal_type: string;
   reveal_config?: unknown;
+  view_token?: string;
   // RFC3339 instants from the API, absent (omitempty) when unset (PP-52).
   scheduled_open_at?: string | null;
   expires_at?: string | null;
@@ -172,6 +173,12 @@ export default function Editor() {
   // pixel state — it reuses the same model and render function.
   const [showPreview, setShowPreview] = useState(false);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Publish/share (PP-56). viewToken is the public token, learned on load or on
+  // save; once set the gift has a shareable link. showPublish drives the publish
+  // confirmation modal; copied flashes feedback after copying the link.
+  const [viewToken, setViewToken] = useState<string | null>(null);
+  const [showPublish, setShowPublish] = useState(false);
+  const [copied, setCopied] = useState(false);
   // reveal_type/reveal_config aren't editable yet (confetti is the only MVP
   // mechanic). Held so a full-replace update (PUT) preserves whatever a loaded
   // gift already had instead of resetting it. New gifts default to confetti.
@@ -345,18 +352,82 @@ export default function Editor() {
 
       // POST returns {id, view_token}; PUT returns the full gift. Adopt the id on
       // first create so later saves update in place, and mirror it into the URL.
-      const data = (await res.json()) as { id?: string };
-      if (!giftId && data.id) {
+      const data = (await res.json()) as { id?: string; view_token?: string };
+      const isCreate = !giftId;
+      if (isCreate && data.id) {
         setGiftId(data.id);
         const next = new URL(window.location.href);
         next.searchParams.set('id', data.id);
         window.history.replaceState(null, '', next);
       }
+      if (data.view_token) setViewToken(data.view_token);
       setSaveState('saved');
+      // First publish: surface the shareable link right away (PP-56). Later saves
+      // just confirm with "Guardado ✓"; the link stays reachable via "Compartir".
+      if (isCreate && data.view_token) setShowPublish(true);
     } catch {
       setSaveError('No se pudo guardar. Comprueba tu conexión.');
       setSaveState('error');
     }
+  }
+
+  // The public, shareable URL of the saved gift (PP-56); '' before it exists.
+  function publicUrl(): string {
+    return viewToken ? `${window.location.origin}/g/${viewToken}` : '';
+  }
+
+  // Copy text to the clipboard, preferring the async Clipboard API and falling
+  // back to a hidden-textarea execCommand for older/insecure contexts. Returns
+  // whether it succeeded.
+  async function copyText(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fall through to the legacy path
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // Copy the public link and flash "¡Copiado!" for a moment.
+  async function copyLink() {
+    const url = publicUrl();
+    if (!url) return;
+    if (await copyText(url)) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  // Share the public link via the native share sheet (Web Share API) when
+  // available (PP-56), falling back to copying it. A cancelled share throws
+  // AbortError, which we swallow — the user chose not to share.
+  async function shareLink() {
+    const url = publicUrl();
+    if (!url) return;
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: title || 'Un regalo para ti', url });
+      } catch {
+        // cancelled or failed; nothing to do
+      }
+      return;
+    }
+    await copyLink();
   }
 
   useEffect(() => {
@@ -393,6 +464,7 @@ export default function Editor() {
         setSingleOpen(gift.single_open ?? false);
         if (gift.reveal_type) revealTypeRef.current = gift.reveal_type;
         if (gift.reveal_config !== undefined) revealConfigRef.current = gift.reveal_config;
+        if (gift.view_token) setViewToken(gift.view_token);
         // Load the saved drawing into the model (PP-54 round-trip). On malformed
         // pixel_art, keep the blank starter grid rather than trust bad data.
         // Set the model before status flips to 'ready' so the drawing effect
@@ -603,6 +675,18 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showPreview]);
 
+  // Publish modal (PP-56): clear any stale "copied" flash on open and close on
+  // Escape, mirroring the preview modal.
+  useEffect(() => {
+    if (!showPublish) return;
+    setCopied(false);
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowPublish(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPublish]);
+
   if (status === 'loading') {
     return <p class="px-6 py-10 text-slate-500 dark:text-slate-400">Cargando el editor…</p>;
   }
@@ -667,6 +751,15 @@ export default function Editor() {
           >
             {saveState === 'saving' ? 'Guardando…' : 'Guardar'}
           </button>
+          {viewToken && (
+            <button
+              type="button"
+              onClick={() => setShowPublish(true)}
+              class="rounded-md border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30"
+            >
+              Compartir
+            </button>
+          )}
           <ThemeToggle />
         </div>
       </header>
@@ -982,6 +1075,66 @@ export default function Editor() {
                 {message}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Publish confirmation (PP-56): the gift now has a shareable public link.
+          The link is read-only; "Copiar enlace" uses the clipboard and "Compartir"
+          the native share sheet (Web Share API), falling back to copy. Click the
+          backdrop or press Escape to close. */}
+      {showPublish && viewToken && (
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Regalo publicado"
+          onClick={() => setShowPublish(false)}
+        >
+          <div
+            class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div class="mb-1 flex items-center justify-between">
+              <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                ¡Regalo publicado! 🎉
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowPublish(false)}
+                aria-label="Cerrar"
+                class="rounded-md px-2 py-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            <p class="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              Comparte este enlace con quien va a recibir el regalo:
+            </p>
+            <input
+              type="text"
+              readonly
+              value={publicUrl()}
+              onFocus={(event) => event.currentTarget.select()}
+              aria-label="Enlace público del regalo"
+              class="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200"
+            />
+            <div class="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={copyLink}
+                class="rounded-md border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30"
+              >
+                {copied ? '¡Copiado!' : 'Copiar enlace'}
+              </button>
+              <button
+                type="button"
+                onClick={shareLink}
+                class="rounded-md bg-amber-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-amber-400 dark:bg-amber-400 dark:text-slate-900 dark:hover:bg-amber-300"
+              >
+                Compartir
+              </button>
+            </div>
           </div>
         </div>
       )}
