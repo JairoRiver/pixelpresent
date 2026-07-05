@@ -106,6 +106,9 @@ interface GiftData {
   message: string;
   pixel_art: unknown;
   reveal_type: string;
+  // RFC3339 instants from the API, absent (omitempty) when unset (PP-52).
+  scheduled_open_at?: string | null;
+  expires_at?: string | null;
 }
 
 function giftIdFromURL(): string | null {
@@ -113,10 +116,26 @@ function giftIdFromURL(): string | null {
   return new URLSearchParams(window.location.search).get('id');
 }
 
+// isoToDateInput turns an RFC3339 instant from the API into the value an
+// <input type="date"> expects — a local calendar date "YYYY-MM-DD" — or '' when
+// absent/unparseable. The time of day is dropped on purpose: the scheduling
+// gates are date-only (a gift opens/expires on a day, not at a given minute).
+// Saving (PP-54) turns the date back into an absolute instant.
+function isoToDateInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function Editor() {
   const [status, setStatus] = useState<Status>('loading');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  // Optional scheduling gates (PP-52), held as date strings "YYYY-MM-DD" ('' = unset).
+  const [scheduledOpenAt, setScheduledOpenAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -259,6 +278,8 @@ export default function Editor() {
         if (!gift) return;
         setTitle(gift.title);
         setMessage(gift.message);
+        setScheduledOpenAt(isoToDateInput(gift.scheduled_open_at));
+        setExpiresAt(isoToDateInput(gift.expires_at));
         setStatus('ready');
       })
       .catch(() => setStatus('error'));
@@ -690,6 +711,44 @@ export default function Editor() {
               placeholder="El mensaje que se revela al abrir el regalo"
               class={FIELD_CLASS}
             />
+          </div>
+
+          {/* Scheduling gates (PP-52): both optional and date-only (the day is
+              enough for a gift; picking a time is needless friction). An empty
+              input means unset (no gate). The backend applies scheduled_open_at /
+              expires_at as visibility gates (PP-24). Wiring these into the
+              save/load round-trip is PP-54. */}
+          <div>
+            <label for="gift-open-at" class="block text-sm font-medium text-slate-600 dark:text-slate-300">
+              Apertura programada{' '}
+              <span class="font-normal text-slate-400 dark:text-slate-500">(opcional)</span>
+            </label>
+            <input
+              id="gift-open-at"
+              type="date"
+              value={scheduledOpenAt}
+              onInput={(event) => setScheduledOpenAt(event.currentTarget.value)}
+              class={FIELD_CLASS}
+            />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              El regalo no podrá abrirse antes de este día.
+            </p>
+          </div>
+          <div>
+            <label for="gift-expires-at" class="block text-sm font-medium text-slate-600 dark:text-slate-300">
+              Caducidad{' '}
+              <span class="font-normal text-slate-400 dark:text-slate-500">(opcional)</span>
+            </label>
+            <input
+              id="gift-expires-at"
+              type="date"
+              value={expiresAt}
+              onInput={(event) => setExpiresAt(event.currentTarget.value)}
+              class={FIELD_CLASS}
+            />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Tras este día el regalo dejará de estar disponible.
+            </p>
           </div>
         </aside>
       </div>
