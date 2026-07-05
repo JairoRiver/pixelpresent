@@ -222,6 +222,30 @@ export function sizeCanvas(
   return ctx;
 }
 
+// toPNGDataURL renders the model to an off-screen canvas at cellSize pixels per
+// cell and returns a PNG data URL for download. Unlike render, empty cells are
+// left transparent (not filled with a surface colour) and no grid is drawn, so
+// the export is clean pixel art on a transparent background. Returns '' if a 2D
+// context is unavailable.
+export function toPNGDataURL(model: PixelCanvas, cellSize: number): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = model.width * cellSize;
+  canvas.height = model.height * cellSize;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  const { width, height, palette, pixels } = model;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const value = pixels[y * width + x];
+      if (value === EMPTY) continue; // leave transparent
+      ctx.fillStyle = palette[value];
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+    }
+  }
+  return canvas.toDataURL('image/png');
+}
+
 // render redraws the whole grid, one fillRect per cell. Even at the 128×128
 // maximum this is effectively instant, so there is no partial redraw. Empty
 // cells are painted with the surface colour (theme-aware) and grid lines on top.

@@ -1,0 +1,10 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import GiftView from '../../components/GiftView.tsx';
+---
+
+{/* Public reveal page (PP-57). Built to dist/g/index.html; the Go binary serves
+    it for every /g/{view_token} URL (the token is read client-side). */}
+<Layout title="Un regalo para ti — Pixel Present">
+  <GiftView client:load />
+</Layout>

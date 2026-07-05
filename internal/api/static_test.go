@@ -32,3 +32,17 @@ func TestStatic_ServesEmbeddedSite(t *testing.T) {
 	// A path with no matching file 404s (no SPA index fallback).
 	require.Equal(t, http.StatusNotFound, getPath(srv, "/missing.txt").Code)
 }
+
+func TestReveal_ServesPageForTokenizedURL(t *testing.T) {
+	srv := NewServer(nil, giftSessions(), nil, nil)
+	srv.ServeStatic(fstest.MapFS{
+		"index.html":   {Data: []byte("<h1>home</h1>")},
+		"g/index.html": {Data: []byte("<h1>reveal</h1>")},
+	})
+
+	// The tokenized public URL has no matching file, but the reveal route serves
+	// the reveal document rather than 404ing (the token is read client-side).
+	res := getPath(srv, "/g/some-view-token")
+	require.Equal(t, http.StatusOK, res.Code)
+	require.Contains(t, res.Body.String(), "reveal")
+}

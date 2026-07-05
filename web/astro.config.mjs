@@ -16,7 +16,23 @@ export default defineConfig({
   outDir: '../internal/web/dist',
 
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      // Dev only: mirror the Go binary's /g/{token} catch-all. The static build
+      // emits a single /g/index.html and the Go server serves it for every
+      // tokenized reveal URL; the Astro dev server would 404 on /g/{token}, so
+      // rewrite those requests to /g/ (the browser keeps the tokenized URL, which
+      // the reveal island reads from the pathname).
+      {
+        name: 'pp-reveal-dev-rewrite',
+        configureServer(server) {
+          server.middlewares.use((req, _res, next) => {
+            if (req.url && /^\/g\/[^/?#]+/.test(req.url)) req.url = '/g/';
+            next();
+          });
+        },
+      },
+    ],
     server: {
       // Dev only: the Astro dev server proxies the API to the local Go server so
       // the browser sees a single origin (no CORS). In production the same Go

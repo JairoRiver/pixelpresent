@@ -110,11 +110,22 @@ func (s *Server) Routes() http.Handler {
 	// Serve the embedded frontend for any path the API does not handle (root and
 	// every non-/api route): /, /_astro/*, ...
 	if s.static != nil {
+		// The public reveal URL /g/{view_token} carries a token, not a file, so the
+		// file server below would 404 on it. Serve the reveal document explicitly;
+		// the page reads the token from the URL and calls GET /api/g/{view_token}.
+		r.Get("/g/{view_token}", s.handleRevealPage)
+
 		fileServer := http.FileServerFS(s.static)
 		r.NotFound(fileServer.ServeHTTP)
 	}
 
 	return r
+}
+
+// handleRevealPage serves the public reveal document (Astro's g/index.html) for
+// any tokenized /g/{view_token} browser URL. See the route comment above.
+func (s *Server) handleRevealPage(w http.ResponseWriter, r *http.Request) {
+	http.ServeFileFS(w, r, s.static, "g/index.html")
 }
 
 // ServeStatic mounts fsys (the embedded frontend) as the fallback for any route
