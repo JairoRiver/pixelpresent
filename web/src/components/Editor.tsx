@@ -12,7 +12,7 @@ import {
   type PixelCanvas,
   type SurfaceColors,
 } from '../lib/canvas';
-import { EraserIcon, PaintBucketIcon, PencilIcon, RedoIcon, UndoIcon } from './icons';
+import { EraserIcon, MoveIcon, PaintBucketIcon, PencilIcon, RedoIcon, UndoIcon } from './icons';
 import ThemeToggle from './ThemeToggle';
 
 // The colour the pencil starts on before the user picks another (PP-45).
@@ -37,11 +37,12 @@ function roundZoom(z: number): number {
   return Math.round(z * 100) / 100;
 }
 
-// Grid size (PP-49): square grids from 8×8 to 64×64 (architecture §editor caps
-// the editor at 128×128, but grids beyond 64 need pan, which is PP-50; this task
-// stops at 64). Two quick presets plus a custom numeric input drive the size.
+// Grid size: square grids from 8×8 up to the architecture's 128×128 cap. PP-49
+// added the presets and custom input (capped at 64); PP-50 raises the ceiling to
+// 128 now that large grids can be panned. Two quick presets plus a custom
+// numeric input drive the size.
 const SIZE_MIN = 8;
-const SIZE_MAX = 64;
+const SIZE_MAX = 128;
 const SIZE_PRESETS = [16, 32];
 
 // Clamps a requested size into range and to a whole number of cells, falling
@@ -60,10 +61,12 @@ const SWATCHES = [
   '#6366f1', '#a855f7', '#ec4899', '#f9a8d4',
 ];
 
-// Active drawing tool. Pencil paints the current colour and eraser clears cells
-// back to EMPTY — both share the same drag interaction (PP-44). Fill (PP-46)
-// flood-fills the clicked region with the current colour on a single click.
-type Tool = 'pencil' | 'eraser' | 'fill';
+// Active tool. Pencil paints the current colour and eraser clears cells back to
+// EMPTY — both share the same drag interaction (PP-44). Fill (PP-46) flood-fills
+// the clicked region on a single click. Pan (PP-50) is a separate "move view"
+// mode: a drag scrolls the board instead of painting, so large grids that don't
+// fit on screen (up to 128×128) can be navigated with touch precision.
+type Tool = 'pencil' | 'eraser' | 'fill' | 'pan';
 
 // Shared class for a tool-bar button, theme-aware (PP-44.5). Extracted so the
 // three buttons stay identical and the light/dark styling lives in one place.
@@ -325,6 +328,13 @@ export default function Editor() {
 
     let drawing = false;
     let last: { x: number; y: number } | null = null;
+    // Pan mode (PP-50): a drag scrolls the board instead of painting. We scroll
+    // it manually (rather than relying on native touch scroll) so mouse and touch
+    // behave identically and touch-action:none can stay on to keep the page from
+    // scrolling/zooming underneath. panStart captures the pointer and scroll
+    // position at the gesture's start; scroll = start − finger movement.
+    let panning = false;
+    let panStart: { x: number; y: number; left: number; top: number } | null = null;
 
     function paint(from: { x: number; y: number }, to: { x: number; y: number }) {
       const ink = toolRef.current === 'eraser' ? EMPTY : colorIndex(model, colorRef.current);
@@ -333,6 +343,19 @@ export default function Editor() {
     }
 
     function onPointerDown(event: PointerEvent) {
+      // Pan mode: start a drag-to-scroll gesture; no cell, no history, no paint.
+      if (toolRef.current === 'pan') {
+        panning = true;
+        panStart = {
+          x: event.clientX,
+          y: event.clientY,
+          left: board.scrollLeft,
+          top: board.scrollTop,
+        };
+        canvas.setPointerCapture(event.pointerId);
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
       const cell = cellFromEvent(event);
       if (!cell) return;
       // A discrete action begins here: snapshot the pixels before mutating so the
@@ -352,6 +375,11 @@ export default function Editor() {
     }
 
     function onPointerMove(event: PointerEvent) {
+      if (panning && panStart) {
+        board.scrollLeft = panStart.left - (event.clientX - panStart.x);
+        board.scrollTop = panStart.top - (event.clientY - panStart.y);
+        return;
+      }
       if (!drawing) return;
       const cell = cellFromEvent(event);
       if (!cell) return;
@@ -360,6 +388,12 @@ export default function Editor() {
     }
 
     function onPointerUp(event: PointerEvent) {
+      if (panning) {
+        panning = false;
+        panStart = null;
+        // Drop the inline grabbing cursor; the class falls back to grab.
+        canvas.style.cursor = '';
+      }
       drawing = false;
       last = null;
       if (canvas.hasPointerCapture(event.pointerId)) {
@@ -485,6 +519,15 @@ export default function Editor() {
               <PaintBucketIcon class="h-4 w-4" />
               Relleno
             </button>
+            <button
+              type="button"
+              onClick={() => setTool('pan')}
+              aria-pressed={tool === 'pan'}
+              class={toolButtonClass(tool === 'pan')}
+            >
+              <MoveIcon class="h-4 w-4" />
+              Mover
+            </button>
 
             {/* Undo/redo (PP-47): action buttons, not tools, so no aria-pressed.
                 Disabled when their history stack is empty; Ctrl/Cmd+Z and
@@ -546,9 +589,9 @@ export default function Editor() {
           </div>
 
           {/* Grid size (PP-49): two quick presets plus a custom numeric input
-              (8–64). Changing size recreates the grid — keeping the overlapping
-              drawing — and clears undo/redo. Larger grids that need pan are a
-              later task (PP-50). */}
+              (8–128, raised from 64 by PP-50). Changing size recreates the grid —
+              keeping the overlapping drawing — and clears undo/redo. Grids too big
+              to fit are navigated with the Mover (pan) tool (PP-50). */}
           <div
             class="flex flex-wrap items-center gap-2 self-start"
             role="group"
@@ -574,7 +617,7 @@ export default function Editor() {
                 max={SIZE_MAX}
                 value={size}
                 onChange={(event) => changeSize(event.currentTarget.valueAsNumber)}
-                aria-label="Tamaño personalizado del lienzo (entre 8 y 64)"
+                aria-label="Tamaño personalizado del lienzo (entre 8 y 128)"
                 class="w-16 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-slate-900 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-slate-100"
               />
             </label>
@@ -614,9 +657,13 @@ export default function Editor() {
           </div>
 
           {/* The board is the measured container (its width drives the fit-to-
-              width base); it scrolls when zoom makes the canvas overflow. */}
+              width base); it scrolls when the canvas overflows (zoom or a large
+              grid), and the Mover tool (PP-50) pans it by setting its scroll. */}
           <div ref={boardRef} class="max-h-[70vh] w-full max-w-lg overflow-auto">
-            <canvas ref={canvasRef} class="mx-auto block cursor-crosshair touch-none" />
+            <canvas
+              ref={canvasRef}
+              class={`mx-auto block touch-none ${tool === 'pan' ? 'cursor-grab' : 'cursor-crosshair'}`}
+            />
           </div>
         </section>
 
