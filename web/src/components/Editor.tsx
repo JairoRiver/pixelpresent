@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   colorIndex,
   createCanvas,
+  deserializeCanvas,
   EMPTY,
   fitCellSize,
   floodFill,
   paintLine,
   render,
   resizeCanvas,
+  serializeCanvas,
   sizeCanvas,
   type PixelCanvas,
   type SurfaceColors,
@@ -106,6 +108,7 @@ interface GiftData {
   message: string;
   pixel_art: unknown;
   reveal_type: string;
+  reveal_config?: unknown;
   // RFC3339 instants from the API, absent (omitempty) when unset (PP-52).
   scheduled_open_at?: string | null;
   expires_at?: string | null;
@@ -131,6 +134,24 @@ function isoToDateInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// dateInputToISO is the inverse of isoToDateInput for saving (PP-54): it turns a
+// date-only "YYYY-MM-DD" into an absolute RFC3339 instant, or null when empty.
+// The gate boundaries (gifts/visibility.go) are scheduled_open_at inclusive and
+// expires_at exclusive, so an open date maps to the local start of that day and
+// an expiry date to the local end of it (23:59:59.999) — the gift is then
+// viewable through the whole expiry day, and both round-trip back to the same
+// day via isoToDateInput (which reads the local calendar date).
+function dateInputToISO(date: string, endOfDay: boolean): string | null {
+  if (!date) return null;
+  const [y, m, d] = date.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = endOfDay
+    ? new Date(y, m - 1, d, 23, 59, 59, 999)
+    : new Date(y, m - 1, d, 0, 0, 0, 0);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
 export default function Editor() {
   const [status, setStatus] = useState<Status>('loading');
   const [title, setTitle] = useState('');
@@ -140,6 +161,18 @@ export default function Editor() {
   const [expiresAt, setExpiresAt] = useState('');
   // Single-open toggle (PP-53): the gift can be opened only once when set.
   const [singleOpen, setSingleOpen] = useState(false);
+
+  // Save wiring (PP-54). giftId is the gift being edited: null for a brand-new
+  // one (save does POST), set once it exists (save does PUT). It seeds from the
+  // ?id URL param and is filled in after the first create.
+  const [giftId, setGiftId] = useState<string | null>(() => giftIdFromURL());
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
+  // reveal_type/reveal_config aren't editable yet (confetti is the only MVP
+  // mechanic). Held so a full-replace update (PUT) preserves whatever a loaded
+  // gift already had instead of resetting it. New gifts default to confetti.
+  const revealTypeRef = useRef<string>('confetti');
+  const revealConfigRef = useRef<unknown>({});
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -253,6 +286,75 @@ export default function Editor() {
     setTool('pencil');
   }
 
+  // Persist the gift (PP-54): serialize the editor state to the write payload and
+  // POST a new gift or PUT the existing one. On the first create we capture the
+  // id and reflect it in the URL so a reload edits the same gift (the round-trip
+  // the DoD asks for). Save is disabled while in flight to avoid double submits.
+  async function save() {
+    if (title.trim() === '') {
+      setSaveError('El título es obligatorio.');
+      setSaveState('error');
+      return;
+    }
+    setSaveState('saving');
+    setSaveError('');
+
+    const body = {
+      title: title.trim(),
+      message,
+      pixel_art: serializeCanvas(modelRef.current),
+      reveal_type: revealTypeRef.current,
+      reveal_config: revealConfigRef.current,
+      recipient_email: null,
+      scheduled_open_at: dateInputToISO(scheduledOpenAt, false),
+      scheduled_send_at: null,
+      single_open: singleOpen,
+      expires_at: dateInputToISO(expiresAt, true),
+    };
+
+    try {
+      const res = await fetch(giftId ? `/api/gifts/${giftId}` : '/api/gifts', {
+        method: giftId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.status === 401) {
+        window.location.replace('/login');
+        return;
+      }
+      if (res.status === 400) {
+        setSaveError('Revisa los campos del regalo.');
+        setSaveState('error');
+        return;
+      }
+      if (res.status === 403 || res.status === 404) {
+        setSaveError('Ese regalo no existe o no es tuyo.');
+        setSaveState('error');
+        return;
+      }
+      if (!res.ok) {
+        setSaveError('No se pudo guardar. Inténtalo de nuevo.');
+        setSaveState('error');
+        return;
+      }
+
+      // POST returns {id, view_token}; PUT returns the full gift. Adopt the id on
+      // first create so later saves update in place, and mirror it into the URL.
+      const data = (await res.json()) as { id?: string };
+      if (!giftId && data.id) {
+        setGiftId(data.id);
+        const next = new URL(window.location.href);
+        next.searchParams.set('id', data.id);
+        window.history.replaceState(null, '', next);
+      }
+      setSaveState('saved');
+    } catch {
+      setSaveError('No se pudo guardar. Comprueba tu conexión.');
+      setSaveState('error');
+    }
+  }
+
   useEffect(() => {
     const id = giftIdFromURL();
 
@@ -285,6 +387,18 @@ export default function Editor() {
         setScheduledOpenAt(isoToDateInput(gift.scheduled_open_at));
         setExpiresAt(isoToDateInput(gift.expires_at));
         setSingleOpen(gift.single_open ?? false);
+        if (gift.reveal_type) revealTypeRef.current = gift.reveal_type;
+        if (gift.reveal_config !== undefined) revealConfigRef.current = gift.reveal_config;
+        // Load the saved drawing into the model (PP-54 round-trip). On malformed
+        // pixel_art, keep the blank starter grid rather than trust bad data.
+        // Set the model before status flips to 'ready' so the drawing effect
+        // renders it; sync the size control to the loaded grid (assumed square,
+        // which is all this editor produces).
+        const loaded = deserializeCanvas(gift.pixel_art);
+        if (loaded) {
+          modelRef.current = loaded;
+          setSize(loaded.width);
+        }
         setStatus('ready');
       })
       .catch(() => setStatus('error'));
@@ -503,8 +617,23 @@ export default function Editor() {
         >
           ← PIXEL&nbsp;PRESENT
         </a>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-500 dark:text-slate-400">Editor</span>
+        <div class="flex items-center gap-3">
+          {saveState === 'error' && saveError && (
+            <span class="text-xs text-rose-600 dark:text-rose-300" role="alert">
+              {saveError}
+            </span>
+          )}
+          {saveState === 'saved' && (
+            <span class="text-xs text-emerald-600 dark:text-emerald-300">Guardado ✓</span>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saveState === 'saving'}
+            class="rounded-md bg-amber-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-400 dark:text-slate-900 dark:hover:bg-amber-300"
+          >
+            {saveState === 'saving' ? 'Guardando…' : 'Guardar'}
+          </button>
           <ThemeToggle />
         </div>
       </header>

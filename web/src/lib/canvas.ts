@@ -44,6 +44,48 @@ export function fitCellSize(
   return Math.max(min, Math.min(max, fit));
 }
 
+// SerializedCanvas is the JSON shape persisted in gifts.pixel_art: the same as
+// PixelCanvas but with pixels as a plain number array, because a Uint8Array does
+// not JSON-stringify to an array (JSON.stringify turns it into an object with
+// numeric keys). serializeCanvas / deserializeCanvas convert between the
+// in-memory model and this shape (PP-54).
+export interface SerializedCanvas {
+  width: number;
+  height: number;
+  palette: string[];
+  pixels: number[];
+}
+
+// serializeCanvas turns the in-memory model into the plain-JSON shape stored in
+// gifts.pixel_art. The palette is copied so later edits can't mutate a payload
+// already handed off.
+export function serializeCanvas(model: PixelCanvas): SerializedCanvas {
+  return {
+    width: model.width,
+    height: model.height,
+    palette: model.palette.slice(),
+    pixels: Array.from(model.pixels),
+  };
+}
+
+// deserializeCanvas rebuilds a PixelCanvas from a parsed gifts.pixel_art value,
+// or returns null when the value isn't a well-formed canvas (wrong types, or a
+// pixels length that doesn't match width*height). Callers fall back to a blank
+// canvas on null rather than trusting malformed data.
+export function deserializeCanvas(value: unknown): PixelCanvas | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const { width, height, palette, pixels } = v;
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
+  const w = width as number;
+  const h = height as number;
+  if (w <= 0 || h <= 0) return null;
+  if (!Array.isArray(palette) || !palette.every((c) => typeof c === 'string')) return null;
+  if (!Array.isArray(pixels) || pixels.length !== w * h) return null;
+  if (!pixels.every((p) => typeof p === 'number')) return null;
+  return { width: w, height: h, palette: palette.slice(), pixels: Uint8Array.from(pixels) };
+}
+
 // resizeCanvas returns a new grid of the given size (PP-49), preserving the
 // palette and the overlapping top-left region of the current drawing: cells that
 // fall outside the new bounds are dropped and any newly exposed cells start
