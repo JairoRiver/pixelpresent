@@ -7,6 +7,7 @@ import {
   floodFill,
   paintLine,
   render,
+  resizeCanvas,
   sizeCanvas,
   type PixelCanvas,
   type SurfaceColors,
@@ -34,6 +35,20 @@ const ZOOM_STEP = 0.25;
 // float noise (e.g. 0.7500000001) in the percentage label.
 function roundZoom(z: number): number {
   return Math.round(z * 100) / 100;
+}
+
+// Grid size (PP-49): square grids from 8×8 to 64×64 (architecture §editor caps
+// the editor at 128×128, but grids beyond 64 need pan, which is PP-50; this task
+// stops at 64). Two quick presets plus a custom numeric input drive the size.
+const SIZE_MIN = 8;
+const SIZE_MAX = 64;
+const SIZE_PRESETS = [16, 32];
+
+// Clamps a requested size into range and to a whole number of cells, falling
+// back to 16 when the input is empty/NaN (e.g. the custom field cleared).
+function clampSize(n: number): number {
+  if (!Number.isFinite(n)) return 16;
+  return Math.max(SIZE_MIN, Math.min(SIZE_MAX, Math.round(n)));
 }
 
 // Curated starter swatches (PP-45): a small warm/retro set for one-tap picks,
@@ -102,10 +117,12 @@ export default function Editor() {
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [zoom, setZoom] = useState(1);
+  const [size, setSize] = useState(16);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
-  // The drawing model. A fixed 16×16 for PP-42; selectable sizes arrive in PP-49.
+  // The drawing model. Starts 16×16; the size controls (PP-49) swap it for a new
+  // grid of the chosen size, preserving the overlapping region.
   const modelRef = useRef<PixelCanvas>(createCanvas(16, 16));
   // Mirror the active tool into a ref so the pointer closures below read the
   // current tool without re-running the drawing effect (which would rebind the
@@ -139,6 +156,21 @@ export default function Editor() {
   }
   function resetZoom() {
     setZoom(1);
+  }
+
+  // Change the grid size (PP-49). Recreates the model at the new square size
+  // (keeping the overlapping drawing) and clears undo/redo, whose snapshots are
+  // sized to the old grid and can't be replayed onto the new one. Updating `size`
+  // re-runs the drawing effect, which re-sizes the canvas and repaints.
+  function changeSize(next: number) {
+    const clamped = clampSize(next);
+    if (clamped !== modelRef.current.width || clamped !== modelRef.current.height) {
+      modelRef.current = resizeCanvas(modelRef.current, clamped, clamped);
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      syncHistory();
+    }
+    setSize(clamped);
   }
 
   // Undo/redo history (PP-47): each stack holds full copies of `pixels` (not the
@@ -369,7 +401,7 @@ export default function Editor() {
       window.removeEventListener('keydown', onKeyDown);
       themeObserver.disconnect();
     };
-  }, [status]);
+  }, [status, size]);
 
   if (status === 'loading') {
     return <p class="px-6 py-10 text-slate-500 dark:text-slate-400">Cargando el editor…</p>;
@@ -418,9 +450,9 @@ export default function Editor() {
       </header>
 
       <div class="grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[1fr_20rem]">
-        {/* Canvas area. The board fits its container width (responsive/mobile)
-            and zoom (PP-48) scales from there; selectable sizes (PP-49) come
-            later. */}
+        {/* Canvas area. The board fits its container width (responsive/mobile);
+            zoom (PP-48) scales from there and the size control (PP-49) picks the
+            grid dimensions. */}
         <section class="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-white/10 dark:bg-white/5">
           {/* Tool bar. Pencil and eraser share the same drag interaction; the
               eraser clears cells back to empty (PP-44). Fill (PP-46) flood-fills
@@ -509,6 +541,41 @@ export default function Editor() {
                 onInput={(event) => pickColor(event.currentTarget.value)}
                 aria-label="Elegir un color personalizado"
                 class="h-8 w-12 cursor-pointer rounded border border-slate-300 bg-transparent dark:border-white/15"
+              />
+            </label>
+          </div>
+
+          {/* Grid size (PP-49): two quick presets plus a custom numeric input
+              (8–64). Changing size recreates the grid — keeping the overlapping
+              drawing — and clears undo/redo. Larger grids that need pan are a
+              later task (PP-50). */}
+          <div
+            class="flex flex-wrap items-center gap-2 self-start"
+            role="group"
+            aria-label="Tamaño del lienzo"
+          >
+            <span class="text-sm text-slate-600 dark:text-slate-300">Tamaño</span>
+            {SIZE_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => changeSize(preset)}
+                aria-pressed={size === preset}
+                class={toolButtonClass(size === preset)}
+              >
+                {preset}×{preset}
+              </button>
+            ))}
+            <label class="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+              Personalizado
+              <input
+                type="number"
+                min={SIZE_MIN}
+                max={SIZE_MAX}
+                value={size}
+                onChange={(event) => changeSize(event.currentTarget.valueAsNumber)}
+                aria-label="Tamaño personalizado del lienzo (entre 8 y 64)"
+                class="w-16 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-slate-900 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-slate-100"
               />
             </label>
           </div>

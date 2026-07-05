@@ -44,6 +44,24 @@ export function fitCellSize(
   return Math.max(min, Math.min(max, fit));
 }
 
+// resizeCanvas returns a new grid of the given size (PP-49), preserving the
+// palette and the overlapping top-left region of the current drawing: cells that
+// fall outside the new bounds are dropped and any newly exposed cells start
+// EMPTY. Resizing this way means changing the grid size (a preset or the custom
+// input) never silently wipes the work already on the board.
+export function resizeCanvas(model: PixelCanvas, width: number, height: number): PixelCanvas {
+  const pixels = new Uint8Array(width * height);
+  pixels.fill(EMPTY);
+  const copyW = Math.min(width, model.width);
+  const copyH = Math.min(height, model.height);
+  for (let y = 0; y < copyH; y++) {
+    for (let x = 0; x < copyW; x++) {
+      pixels[y * width + x] = model.pixels[y * model.width + x];
+    }
+  }
+  return { width, height, palette: model.palette.slice(), pixels };
+}
+
 // colorIndex returns the palette index for a hex colour, appending it to the
 // palette the first time it is used. The palette holds at most 255 colours
 // (0..254; 255 is EMPTY); once full it reuses the last slot rather than grow.
