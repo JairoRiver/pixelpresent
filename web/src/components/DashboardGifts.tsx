@@ -112,7 +112,7 @@ export default function DashboardGifts() {
               href={`/g/${gift.view_token}`}
               class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
-              Ver regalo →
+              Abrir enlace público →
             </a>
           </div>
         </li>

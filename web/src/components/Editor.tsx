@@ -168,6 +168,10 @@ export default function Editor() {
   const [giftId, setGiftId] = useState<string | null>(() => giftIdFromURL());
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
+  // Preview modal (PP-55): renders the live model at a smaller scale, so no extra
+  // pixel state — it reuses the same model and render function.
+  const [showPreview, setShowPreview] = useState(false);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   // reveal_type/reveal_config aren't editable yet (confetti is the only MVP
   // mechanic). Held so a full-replace update (PUT) preserves whatever a loaded
   // gift already had instead of resetting it. New gifts default to confetti.
@@ -577,6 +581,28 @@ export default function Editor() {
     };
   }, [status, size]);
 
+  // Render the preview when the modal opens (PP-55). It reads the live model, so
+  // it always shows the latest drawing; a smaller cellSize fits it into the modal
+  // and grid=false gives the clean look the recipient will see — no extra state,
+  // just the shared render function.
+  useEffect(() => {
+    if (!showPreview) return;
+    const el = previewCanvasRef.current;
+    if (el === null) return;
+    const model = modelRef.current;
+    // Fit the whole drawing into a ~320px box; never below 1px per cell.
+    const cellSize = Math.max(1, Math.floor(320 / Math.max(model.width, model.height)));
+    const ctx = sizeCanvas(el, model, cellSize);
+    if (ctx) render(ctx, model, cellSize, surfaceColors(), false);
+
+    // Close on Escape while the modal is open.
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowPreview(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPreview]);
+
   if (status === 'loading') {
     return <p class="px-6 py-10 text-slate-500 dark:text-slate-400">Cargando el editor…</p>;
   }
@@ -626,6 +652,13 @@ export default function Editor() {
           {saveState === 'saved' && (
             <span class="text-xs text-emerald-600 dark:text-emerald-300">Guardado ✓</span>
           )}
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            class="rounded-md border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30"
+          >
+            Vista previa
+          </button>
           <button
             type="button"
             onClick={save}
@@ -908,6 +941,50 @@ export default function Editor() {
           </div>
         </aside>
       </div>
+
+      {/* Preview modal (PP-55): the recipient's-eye view of the gift, drawn from
+          the live model with the shared render function at a smaller, gridless
+          scale. Title and message reuse the existing state — no preview-only
+          data. Click the backdrop or press Escape to close. */}
+      {showPreview && (
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vista previa del regalo"
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Vista previa</h2>
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                aria-label="Cerrar vista previa"
+                class="rounded-md px-2 py-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            {title && (
+              <p class="mb-3 text-center text-lg font-semibold text-slate-900 dark:text-slate-100">
+                {title}
+              </p>
+            )}
+            <div class="flex justify-center">
+              <canvas ref={previewCanvasRef} class="block rounded-md shadow-sm" />
+            </div>
+            {message && (
+              <p class="mt-4 text-center text-sm whitespace-pre-wrap text-slate-600 dark:text-slate-300">
+                {message}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

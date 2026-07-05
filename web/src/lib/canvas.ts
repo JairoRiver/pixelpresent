@@ -225,11 +225,14 @@ export function sizeCanvas(
 // render redraws the whole grid, one fillRect per cell. Even at the 128×128
 // maximum this is effectively instant, so there is no partial redraw. Empty
 // cells are painted with the surface colour (theme-aware) and grid lines on top.
+// `grid` draws the cell borders; the preview (PP-55) passes false for a clean,
+// recipient's-eye render at a smaller scale.
 export function render(
   ctx: CanvasRenderingContext2D,
   model: PixelCanvas,
   cellSize: number,
   colors: SurfaceColors = DEFAULT_COLORS,
+  grid = true,
 ): void {
   const { width, height, palette, pixels } = model;
 
@@ -242,6 +245,8 @@ export function render(
       ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     }
   }
+
+  if (!grid) return;
 
   // Grid lines on top, aligned to cell boundaries (0.5 offset keeps 1px crisp).
   ctx.strokeStyle = colors.grid;
