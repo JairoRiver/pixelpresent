@@ -109,6 +109,8 @@ interface GiftData {
   // RFC3339 instants from the API, absent (omitempty) when unset (PP-52).
   scheduled_open_at?: string | null;
   expires_at?: string | null;
+  // Always present in the API response (PP-53).
+  single_open?: boolean;
 }
 
 function giftIdFromURL(): string | null {
@@ -136,6 +138,8 @@ export default function Editor() {
   // Optional scheduling gates (PP-52), held as date strings "YYYY-MM-DD" ('' = unset).
   const [scheduledOpenAt, setScheduledOpenAt] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  // Single-open toggle (PP-53): the gift can be opened only once when set.
+  const [singleOpen, setSingleOpen] = useState(false);
   const [tool, setTool] = useState<Tool>('pencil');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [zoom, setZoom] = useState(1);
@@ -280,6 +284,7 @@ export default function Editor() {
         setMessage(gift.message);
         setScheduledOpenAt(isoToDateInput(gift.scheduled_open_at));
         setExpiresAt(isoToDateInput(gift.expires_at));
+        setSingleOpen(gift.single_open ?? false);
         setStatus('ready');
       })
       .catch(() => setStatus('error'));
@@ -749,6 +754,28 @@ export default function Editor() {
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Tras este día el regalo dejará de estar disponible.
             </p>
+          </div>
+
+          {/* Single-open toggle (PP-53): when checked, opening the gift once marks
+              it consumed (opened_at) and further views show "ya abierto". Wiring
+              this into the save round-trip is PP-54. */}
+          <div>
+            <label class="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={singleOpen}
+                onChange={(event) => setSingleOpen(event.currentTarget.checked)}
+                class="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 dark:border-white/20 dark:bg-white/5"
+              />
+              <span>
+                <span class="block text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Apertura única
+                </span>
+                <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                  El regalo solo podrá abrirse una vez; después dejará de estar disponible.
+                </span>
+              </span>
+            </label>
           </div>
         </aside>
       </div>
