@@ -1,5 +1,11 @@
-import { EMPTY, render, sizeCanvas, type PixelCanvas } from './canvas';
-import { emptyColor, revealCellSize, type RevealMechanic } from './reveal';
+import { EMPTY, render, type PixelCanvas } from './canvas';
+import {
+  emptyColor,
+  prepareRevealCanvas,
+  revealCanvasClass,
+  revealCellSize,
+  type RevealMechanic,
+} from './reveal';
 
 // The confetti reveal mechanic (arquitectura §7, MVP): the pixel art's own cells
 // fly in as confetti and assemble into the drawing. This module owns particle
@@ -103,8 +109,9 @@ export const confettiMechanic: RevealMechanic = (container, gift, onComplete) =>
   const canvasH = model.height * cellSize;
 
   const canvas = document.createElement('canvas');
-  canvas.className = 'block rounded-lg shadow-md';
-  const ctx = sizeCanvas(canvas, model, cellSize);
+  canvas.className = revealCanvasClass;
+  canvas.style.imageRendering = 'pixelated';
+  const ctx = prepareRevealCanvas(canvas, model, cellSize);
   container.appendChild(canvas);
 
   // Draw every block interpolated `progress` (0..1) of the way to its target.

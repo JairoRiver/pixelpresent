@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { render, sizeCanvas, toPNGDataURL, type PixelCanvas } from '../lib/canvas';
+import { render, toPNGDataURL, type PixelCanvas } from '../lib/canvas';
 import { confettiMechanic } from '../lib/confetti';
-import { emptyColor, revealCellSize, type RevealMechanic } from '../lib/reveal';
+import {
+  downloadCellSize,
+  emptyColor,
+  finalCellSize,
+  prepareRevealCanvas,
+  revealCanvasClass,
+  type RevealMechanic,
+} from '../lib/reveal';
 import { GiftIcon } from './icons';
 
 // RevealStage is the common wrapper for every reveal mechanic (PP-60). It owns
@@ -88,21 +95,22 @@ export default function RevealStage({
     };
   }, [phase, gift, mechanic]);
 
-  // Render the final drawing once revealed. Reuses the shared render at a
-  // smaller, gridless scale (the recipient's view).
+  // Render the final drawing once revealed, at a higher resolution than the
+  // animation (finalCellSize) so large grids stay crisp; CSS caps the display
+  // size and image-rendering: pixelated keeps the upscale sharp.
   useEffect(() => {
     if (phase !== 'revealed') return;
     const el = canvasRef.current;
     if (el === null) return;
-    const cellSize = revealCellSize(gift.pixelArt);
-    const ctx = sizeCanvas(el, gift.pixelArt, cellSize);
+    const cellSize = finalCellSize(gift.pixelArt);
+    const ctx = prepareRevealCanvas(el, gift.pixelArt, cellSize);
     if (ctx) render(ctx, gift.pixelArt, cellSize, { empty: emptyColor(), grid: '' }, false);
   }, [phase, gift]);
 
-  // Export the pixel art as a downloadable PNG (transparent background, no grid).
+  // Export the pixel art as a downloadable PNG (transparent background, no grid),
+  // at a high resolution (downloadCellSize) for a crisp, shareable image.
   function downloadPNG() {
-    const cellSize = Math.max(1, Math.round(640 / Math.max(gift.pixelArt.width, gift.pixelArt.height)));
-    const url = toPNGDataURL(gift.pixelArt, cellSize);
+    const url = toPNGDataURL(gift.pixelArt, downloadCellSize(gift.pixelArt));
     if (!url) return;
     const a = document.createElement('a');
     a.href = url;
@@ -144,8 +152,8 @@ export default function RevealStage({
   // visible so the recipient can jump to the drawing at any moment.
   if (phase === 'revealing') {
     return (
-      <div class="flex w-full max-w-md flex-col items-center gap-5">
-        <div ref={mechanicRef} class="relative flex items-center justify-center" />
+      <div class="flex w-full max-w-[640px] flex-col items-center gap-5">
+        <div ref={mechanicRef} class="flex w-full items-center justify-center" />
         <button
           type="button"
           onClick={skip}
@@ -157,15 +165,15 @@ export default function RevealStage({
     );
   }
 
-  // Revealed: the final drawing plus the creator's message.
+  // Revealed: the final drawing at full resolution plus the creator's message.
   return (
-    <div class="flex w-full max-w-md flex-col items-center gap-5 text-center">
+    <div class="flex w-full max-w-[640px] flex-col items-center gap-5 text-center">
       {gift.title && (
         <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gift.title}</h1>
       )}
-      <canvas ref={canvasRef} class="block rounded-lg shadow-md" />
+      <canvas ref={canvasRef} class={revealCanvasClass} style={{ imageRendering: 'pixelated' }} />
       {gift.message && (
-        <p class="text-base whitespace-pre-wrap text-slate-600 dark:text-slate-300">
+        <p class="max-w-md text-base whitespace-pre-wrap text-slate-600 dark:text-slate-300">
           {gift.message}
         </p>
       )}
