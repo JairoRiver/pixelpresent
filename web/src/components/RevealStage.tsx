@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { render, sizeCanvas, toPNGDataURL, type PixelCanvas } from '../lib/canvas';
-import {
-  emptyColor,
-  placeholderMechanic,
-  revealCellSize,
-  type RevealMechanic,
-} from '../lib/reveal';
+import { confettiMechanic } from '../lib/confetti';
+import { emptyColor, revealCellSize, type RevealMechanic } from '../lib/reveal';
 import { GiftIcon } from './icons';
 
 // RevealStage is the common wrapper for every reveal mechanic (PP-60). It owns
@@ -51,7 +47,7 @@ function fileName(title: string): string {
 
 export default function RevealStage({
   gift,
-  mechanic = placeholderMechanic,
+  mechanic = confettiMechanic,
 }: {
   gift: RevealGift;
   mechanic?: RevealMechanic;
