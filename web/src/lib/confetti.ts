@@ -1,57 +1,98 @@
-import { EMPTY, sizeCanvas, type PixelCanvas } from './canvas';
-import { revealCellSize, type RevealMechanic } from './reveal';
+import { EMPTY, render, sizeCanvas, type PixelCanvas } from './canvas';
+import { emptyColor, revealCellSize, type RevealMechanic } from './reveal';
 
 // The confetti reveal mechanic (arquitectura §7, MVP): the pixel art's own cells
-// fly in as confetti and assemble into the drawing. This module owns both halves
-// from the backlog — particle generation (PP-61) and the converging animation
-// (PP-62). Coordinates are in canvas pixels (cell * cellSize).
+// fly in as confetti and assemble into the drawing. This module owns particle
+// generation (PP-61), the converging animation (PP-62), and particle grouping on
+// large grids (PP-63). Coordinates are in canvas pixels (cell * cellSize).
+
+// A Particle is one flying block: its current position starts scattered and is
+// interpolated toward its target (its block's place in the grid). On small grids
+// a block is a single cell (w = h = cellSize); on large grids adjacent cells are
+// grouped into one block (PP-63) so fewer particles animate per frame.
+export interface Particle {
+  x: number; // current position (starts at the scattered initial position)
+  y: number;
+  targetX: number; // final position: the block's top-left in the assembled grid
+  targetY: number;
+  w: number; // block size in canvas pixels
+  h: number;
+  color: string; // the block's representative colour (hex, from the palette)
+}
 
 // easeOutCubic decelerates toward the end so particles rush in and settle softly.
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-// A Particle is one non-empty cell: its current position starts scattered and is
-// interpolated toward its final cell in the grid during the reveal.
-export interface Particle {
-  x: number; // current position (starts at the scattered initial position)
-  y: number;
-  targetX: number; // final position: the cell's top-left in the assembled grid
-  targetY: number;
-  color: string; // the cell colour (hex, from the palette)
+// blockSize decides how many cells per side are grouped into one flying particle
+// (PP-63). Below the threshold every cell flies on its own (1); larger grids fold
+// adjacent cells into 2×2 or 4×4 blocks so a 128×128 drawing animates ~1k
+// particles instead of ~16k. Grouping only affects the journey — the final frame
+// is always drawn per cell. Thresholds are starting values to tune on device.
+export function blockSize(model: PixelCanvas): number {
+  const maxDim = Math.max(model.width, model.height);
+  if (maxDim <= 64) return 1;
+  if (maxDim <= 96) return 2;
+  return 4;
 }
 
-// generateParticles builds one Particle per non-empty cell of the drawing. The
-// final position is the cell's place in the grid; the initial position is
-// scattered uniformly across the canvas so the cells look dispersed before they
-// converge. Pure and deterministic apart from the random initial scatter.
+// generateParticles builds one Particle per non-empty block of the drawing (one
+// per cell when block === 1). Each block's colour is the most common non-empty
+// colour inside it (a fair stand-in while it flies; the real per-cell colours are
+// drawn once it lands). Initial positions are scattered uniformly across the
+// canvas so the blocks look dispersed before they converge.
 export function generateParticles(model: PixelCanvas, cellSize: number): Particle[] {
   const { width, height, palette, pixels } = model;
+  const block = blockSize(model);
   const canvasW = width * cellSize;
   const canvasH = height * cellSize;
 
   const particles: Particle[] = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const value = pixels[y * width + x];
-      if (value === EMPTY) continue;
+  for (let by = 0; by < height; by += block) {
+    for (let bx = 0; bx < width; bx += block) {
+      // Tally the non-empty colours in this block to pick a representative and
+      // to know whether the block has anything to show at all.
+      const counts = new Map<number, number>();
+      const blockW = Math.min(block, width - bx);
+      const blockH = Math.min(block, height - by);
+      for (let dy = 0; dy < blockH; dy++) {
+        for (let dx = 0; dx < blockW; dx++) {
+          const value = pixels[(by + dy) * width + (bx + dx)];
+          if (value === EMPTY) continue;
+          counts.set(value, (counts.get(value) ?? 0) + 1);
+        }
+      }
+      if (counts.size === 0) continue; // fully empty block: nothing flies
+
+      let best = EMPTY;
+      let bestCount = 0;
+      for (const [value, count] of counts) {
+        if (count > bestCount) {
+          best = value;
+          bestCount = count;
+        }
+      }
+
       particles.push({
         x: Math.random() * canvasW,
         y: Math.random() * canvasH,
-        targetX: x * cellSize,
-        targetY: y * cellSize,
-        color: palette[value],
+        targetX: bx * cellSize,
+        targetY: by * cellSize,
+        w: blockW * cellSize,
+        h: blockH * cellSize,
+        color: palette[best],
       });
     }
   }
   return particles;
 }
 
-// confettiMechanic is the reveal mechanic: it generates one particle per cell
-// (PP-61) and animates them converging from their scattered initial positions to
-// their target cells with an eased requestAnimationFrame loop (PP-62), assembling
-// the drawing over ~1.5s. On completion the particles sit exactly on their
-// targets (the finished drawing); the stage then swaps in its static canvas.
+// confettiMechanic generates the particles (PP-61) and animates them converging
+// from their scattered initial positions to their targets with an eased
+// requestAnimationFrame loop (PP-62), grouping cells into blocks on large grids
+// to stay smooth (PP-63). The journey draws blocks; the final frame is drawn per
+// cell (pixel-perfect), matching the static canvas the stage swaps in next.
 const DURATION_MS = 1500;
 
 export const confettiMechanic: RevealMechanic = (container, gift, onComplete) => {
@@ -66,7 +107,7 @@ export const confettiMechanic: RevealMechanic = (container, gift, onComplete) =>
   const ctx = sizeCanvas(canvas, model, cellSize);
   container.appendChild(canvas);
 
-  // Draw every particle interpolated `progress` (0..1) of the way to its target.
+  // Draw every block interpolated `progress` (0..1) of the way to its target.
   const drawFrame = (progress: number) => {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvasW, canvasH);
@@ -74,7 +115,7 @@ export const confettiMechanic: RevealMechanic = (container, gift, onComplete) =>
       const x = p.x + (p.targetX - p.x) * progress;
       const y = p.y + (p.targetY - p.y) * progress;
       ctx.fillStyle = p.color;
-      ctx.fillRect(x, y, cellSize, cellSize);
+      ctx.fillRect(x, y, p.w, p.h);
     }
   };
 
@@ -84,11 +125,14 @@ export const confettiMechanic: RevealMechanic = (container, gift, onComplete) =>
 
   const tick = (now: number) => {
     const t = Math.min(1, (now - start) / DURATION_MS);
-    drawFrame(easeOutCubic(t));
     if (t < 1) {
+      drawFrame(easeOutCubic(t));
       raf = requestAnimationFrame(tick);
       return;
     }
+    // Landed: draw the exact drawing per cell so grouped blocks resolve to their
+    // real colours with no visible pop before the stage shows its static canvas.
+    if (ctx) render(ctx, model, cellSize, { empty: emptyColor(), grid: '' }, false);
     finished = true;
     onComplete();
   };
