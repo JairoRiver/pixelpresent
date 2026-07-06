@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import GiftReactions from './GiftReactions';
 
 // Mirror of the API's giftSummary (the light list shape).
 interface GiftSummary {
@@ -120,6 +121,8 @@ export default function DashboardGifts() {
               </a>
             )}
           </div>
+          {/* Reactions only exist once the gift is public (PP-65.5). */}
+          {gift.published_at != null && <GiftReactions giftId={gift.id} />}
         </li>
       ))}
     </ul>

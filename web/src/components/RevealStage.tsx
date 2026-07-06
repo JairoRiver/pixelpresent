@@ -10,6 +10,7 @@ import {
   type RevealMechanic,
 } from '../lib/reveal';
 import { GiftIcon } from './icons';
+import ReactionForm from './ReactionForm';
 
 // RevealStage is the common wrapper for every reveal mechanic (PP-60). It owns
 // the shared state cycle and chrome — the idle expectation screen (PP-59), a
@@ -27,8 +28,9 @@ export interface RevealGift {
 
 // The design's full cycle is idle → interacting → revealing → revealed →
 // reacting. 'interacting' is a mechanic-specific gesture state — confetti's
-// gesture is the idle tap, so it goes straight to 'revealing' — and 'reacting'
-// is the post-reveal reaction UI (PP-65). Both are intentionally not entered yet.
+// gesture is the idle tap, so it goes straight to 'revealing'. 'reacting' is not
+// a separate phase here: the reaction UI (PP-65) is embedded in the revealed
+// screen, so the recipient can react without leaving the drawing.
 type Phase = 'idle' | 'revealing' | 'revealed';
 
 // A generous ceiling well under the design's 1-minute limit: if a mechanic never
@@ -54,9 +56,11 @@ function fileName(title: string): string {
 
 export default function RevealStage({
   gift,
+  viewToken,
   mechanic = confettiMechanic,
 }: {
   gift: RevealGift;
+  viewToken: string;
   mechanic?: RevealMechanic;
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -184,6 +188,7 @@ export default function RevealStage({
       >
         Descargar PNG
       </button>
+      {viewToken && <ReactionForm viewToken={viewToken} />}
     </div>
   );
 }

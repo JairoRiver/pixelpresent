@@ -137,6 +137,7 @@ export default function GiftView() {
           RevealStage (PP-60). A malformed drawing falls through to an error. */}
       {state === 'visible' && gift && model && (
         <RevealStage
+          viewToken={tokenFromPath()}
           gift={{
             title: gift.title,
             message: gift.message,
