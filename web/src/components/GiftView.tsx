@@ -102,6 +102,12 @@ export default function GiftView() {
   const [state, setState] = useState<State>('loading');
   const [gift, setGift] = useState<PublicGift | null>(null);
   const [openAt, setOpenAt] = useState<string | null>(null);
+  // Reveal phase within the visible gift (PP-59): the recipient first sees an
+  // idle expectation screen and only sees the drawing after they interact. For
+  // now the interaction jumps straight to the revealed drawing; the transition
+  // animation (confetti) and the full idle→…→revealed state machine land in
+  // PP-60+. Held here so the whole flow lives in one recipient-facing component.
+  const [revealed, setRevealed] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -136,10 +142,11 @@ export default function GiftView() {
       .catch(() => setState('error'));
   }, []);
 
-  // Render the pixel art once the gift is visible and its canvas is in the DOM.
+  // Render the pixel art once the gift is revealed and its canvas is in the DOM.
   // Reuses the shared render at a smaller, gridless scale (the recipient's view).
+  // Gated on `revealed`: while idle (PP-59) the canvas is not mounted yet.
   useEffect(() => {
-    if (state !== 'visible' || gift === null) return;
+    if (state !== 'visible' || !revealed || gift === null) return;
     const el = canvasRef.current;
     if (el === null) return;
     const model = deserializeCanvas(gift.pixel_art);
@@ -147,7 +154,7 @@ export default function GiftView() {
     const cellSize = Math.max(1, Math.floor(360 / Math.max(model.width, model.height)));
     const ctx = sizeCanvas(el, model, cellSize);
     if (ctx) render(ctx, model, cellSize, { empty: emptyColor(), grid: '' }, false);
-  }, [state, gift]);
+  }, [state, revealed, gift]);
 
   // Export the pixel art as a downloadable PNG (transparent background, no grid).
   // Rendered fresh from the model at an integer scale so pixels stay crisp.
@@ -176,7 +183,36 @@ export default function GiftView() {
         <p class="text-slate-500 dark:text-slate-400">Cargando el regalo…</p>
       )}
 
-      {state === 'visible' && gift && (
+      {/* Idle expectation screen (PP-59): build anticipation before revealing.
+          The drawing stays hidden until the recipient taps/clicks. The teaser is
+          deliberately generic (no title, no art) so the reveal keeps its
+          surprise. Interaction moves to the revealed state (later: confetti). */}
+      {state === 'visible' && gift && !revealed && (
+        <button
+          type="button"
+          onClick={() => setRevealed(true)}
+          class="group flex w-full max-w-sm cursor-pointer flex-col items-center gap-5 rounded-2xl px-6 py-10 text-center transition"
+          aria-label="Descubrir el regalo"
+        >
+          <span class="flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-600 transition group-hover:scale-105 dark:bg-amber-500/15 dark:text-amber-300">
+            <GiftIcon class="h-10 w-10" />
+          </span>
+          <div class="flex flex-col gap-2">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              Hay algo para ti
+            </h1>
+            <p class="text-base text-slate-500 dark:text-slate-400">
+              Hecho píxel a píxel, para este momento.
+            </p>
+          </div>
+          <span class="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white transition group-hover:bg-amber-400 dark:bg-amber-400 dark:text-slate-900 dark:group-hover:bg-amber-300">
+            Descubrir
+          </span>
+          <span class="text-xs text-slate-400 dark:text-slate-500">Toca para abrir</span>
+        </button>
+      )}
+
+      {state === 'visible' && gift && revealed && (
         <div class="flex w-full max-w-md flex-col items-center gap-5 text-center">
           {gift.title && (
             <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gift.title}</h1>
