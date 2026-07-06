@@ -1,14 +1,15 @@
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { deserializeCanvas, render, sizeCanvas, toPNGDataURL } from '../lib/canvas';
+import { useEffect, useState } from 'preact/hooks';
+import { deserializeCanvas } from '../lib/canvas';
 import { CalendarXIcon, ClockIcon, GiftIcon, MailOpenIcon } from './icons';
+import RevealStage from './RevealStage';
 import ThemeToggle from './ThemeToggle';
 
 // GiftView is the public, recipient-facing page (PP-57): it reads the view token
 // from the /g/{token} URL and consumes GET /api/g/{view_token}, which applies the
 // visibility gate and returns a state discriminator. When the gift is visible it
-// renders the drawing directly; each non-visible outcome gets its own dedicated
-// gate screen (PP-58). The reveal animation (Fase 6, PP-59+) builds on top.
+// hands off to RevealStage (PP-60) for the idle → reveal cycle; each non-visible
+// outcome gets its own dedicated gate screen (PP-58).
 
 type State =
   | 'loading'
@@ -41,27 +42,10 @@ function tokenFromPath(): string {
   return parts.length >= 2 && parts[0] === 'g' ? decodeURIComponent(parts[1]) : '';
 }
 
-// The empty-cell colour from the theme-aware CSS variable, so a revealed drawing
-// sits on the page background rather than a hard white block in dark mode.
-function emptyColor(): string {
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--canvas-empty');
-  return v.trim() || '#ffffff';
-}
-
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-// A safe PNG file name derived from the gift title (falls back to a default).
-function fileName(title: string): string {
-  const slug = title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, '-')
-    .replace(/^-+|-+$/g, '');
-  return `${slug || 'pixel-present'}.png`;
 }
 
 // GateScreen is the shared layout for every non-visible outcome (PP-58): an icon
@@ -102,13 +86,6 @@ export default function GiftView() {
   const [state, setState] = useState<State>('loading');
   const [gift, setGift] = useState<PublicGift | null>(null);
   const [openAt, setOpenAt] = useState<string | null>(null);
-  // Reveal phase within the visible gift (PP-59): the recipient first sees an
-  // idle expectation screen and only sees the drawing after they interact. For
-  // now the interaction jumps straight to the revealed drawing; the transition
-  // animation (confetti) and the full idle→…→revealed state machine land in
-  // PP-60+. Held here so the whole flow lives in one recipient-facing component.
-  const [revealed, setRevealed] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const token = tokenFromPath();
@@ -142,36 +119,9 @@ export default function GiftView() {
       .catch(() => setState('error'));
   }, []);
 
-  // Render the pixel art once the gift is revealed and its canvas is in the DOM.
-  // Reuses the shared render at a smaller, gridless scale (the recipient's view).
-  // Gated on `revealed`: while idle (PP-59) the canvas is not mounted yet.
-  useEffect(() => {
-    if (state !== 'visible' || !revealed || gift === null) return;
-    const el = canvasRef.current;
-    if (el === null) return;
-    const model = deserializeCanvas(gift.pixel_art);
-    if (model === null) return;
-    const cellSize = Math.max(1, Math.floor(360 / Math.max(model.width, model.height)));
-    const ctx = sizeCanvas(el, model, cellSize);
-    if (ctx) render(ctx, model, cellSize, { empty: emptyColor(), grid: '' }, false);
-  }, [state, revealed, gift]);
-
-  // Export the pixel art as a downloadable PNG (transparent background, no grid).
-  // Rendered fresh from the model at an integer scale so pixels stay crisp.
-  function downloadPNG() {
-    if (gift === null) return;
-    const model = deserializeCanvas(gift.pixel_art);
-    if (model === null) return;
-    const cellSize = Math.max(1, Math.round(640 / Math.max(model.width, model.height)));
-    const url = toPNGDataURL(model, cellSize);
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName(gift.title);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
+  // The visible gift's drawing, deserialized for RevealStage. null if the stored
+  // pixel_art is malformed — surfaced as an error rather than a broken reveal.
+  const model = gift ? deserializeCanvas(gift.pixel_art) : null;
 
   return (
     <main class="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-12">
@@ -183,54 +133,24 @@ export default function GiftView() {
         <p class="text-slate-500 dark:text-slate-400">Cargando el regalo…</p>
       )}
 
-      {/* Idle expectation screen (PP-59): build anticipation before revealing.
-          The drawing stays hidden until the recipient taps/clicks. The teaser is
-          deliberately generic (no title, no art) so the reveal keeps its
-          surprise. Interaction moves to the revealed state (later: confetti). */}
-      {state === 'visible' && gift && !revealed && (
-        <button
-          type="button"
-          onClick={() => setRevealed(true)}
-          class="group flex w-full max-w-sm cursor-pointer flex-col items-center gap-5 rounded-2xl px-6 py-10 text-center transition"
-          aria-label="Descubrir el regalo"
-        >
-          <span class="flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-600 transition group-hover:scale-105 dark:bg-amber-500/15 dark:text-amber-300">
-            <GiftIcon class="h-10 w-10" />
-          </span>
-          <div class="flex flex-col gap-2">
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              Hay algo para ti
-            </h1>
-            <p class="text-base text-slate-500 dark:text-slate-400">
-              Hecho píxel a píxel, para este momento.
-            </p>
-          </div>
-          <span class="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white transition group-hover:bg-amber-400 dark:bg-amber-400 dark:text-slate-900 dark:group-hover:bg-amber-300">
-            Descubrir
-          </span>
-          <span class="text-xs text-slate-400 dark:text-slate-500">Toca para abrir</span>
-        </button>
+      {/* Visible: hand off the whole idle → reveal → revealed cycle to
+          RevealStage (PP-60). A malformed drawing falls through to an error. */}
+      {state === 'visible' && gift && model && (
+        <RevealStage
+          gift={{
+            title: gift.title,
+            message: gift.message,
+            pixelArt: model,
+            revealType: gift.reveal_type,
+            revealConfig: gift.reveal_config,
+          }}
+        />
       )}
 
-      {state === 'visible' && gift && revealed && (
-        <div class="flex w-full max-w-md flex-col items-center gap-5 text-center">
-          {gift.title && (
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gift.title}</h1>
-          )}
-          <canvas ref={canvasRef} class="block rounded-lg shadow-md" />
-          {gift.message && (
-            <p class="text-base whitespace-pre-wrap text-slate-600 dark:text-slate-300">
-              {gift.message}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={downloadPNG}
-            class="rounded-md border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30"
-          >
-            Descargar PNG
-          </button>
-        </div>
+      {state === 'visible' && gift && !model && (
+        <p class="max-w-md text-center text-rose-600 dark:text-rose-300" role="alert">
+          No hemos podido mostrar este regalo. Inténtalo de nuevo en un momento.
+        </p>
       )}
 
       {state === 'not_yet_open' && (
