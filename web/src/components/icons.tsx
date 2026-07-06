@@ -99,3 +99,46 @@ export function RedoIcon(props: IconProps) {
     </Icon>
   );
 }
+
+// ClockIcon — a gift that is scheduled but not yet openable ("not_yet_open").
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Icon>
+  );
+}
+
+// CalendarXIcon — a gift whose window has closed ("expired").
+export function CalendarXIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 2v4M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+      <path d="m10 14 4 4M14 14l-4 4" />
+    </Icon>
+  );
+}
+
+// MailOpenIcon — a single-open gift that has already been unwrapped ("already_opened").
+export function MailOpenIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M21.2 8.4c.5.4.8 1 .8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0Z" />
+      <path d="m22 10-9.6 6.4a2 2 0 0 1-2.2 0L2 10" />
+    </Icon>
+  );
+}
+
+// GiftIcon — a gift that could not be found ("notfound").
+export function GiftIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="8" width="18" height="4" rx="1" />
+      <path d="M12 8v13M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" />
+      <path d="M12 8C12 8 11 3 8 3a2.5 2.5 0 0 0 0 5h4ZM12 8s1-5 4-5a2.5 2.5 0 0 1 0 5h-4Z" />
+    </Icon>
+  );
+}

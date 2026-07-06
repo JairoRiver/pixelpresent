@@ -252,6 +252,93 @@ func TestService_DeleteOwned_NotFound(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrGiftNotFound)
 }
 
+func TestService_Create_IsDraft(t *testing.T) {
+	svc := NewService(newFakeGiftRepo())
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Borrador",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+	require.Nil(t, created.PublishedAt, "a freshly created gift is a draft")
+}
+
+func TestService_Publish_Own(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+	creator := uuid.New()
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  creator,
+		Title:      "A publicar",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	published, err := svc.Publish(context.Background(), created.ID, creator)
+	require.NoError(t, err)
+	require.NotNil(t, published.PublishedAt, "publishing sets published_at")
+
+	// The stored row is now published too (a recipient would see it).
+	stored, err := repo.GetByID(context.Background(), created.ID)
+	require.NoError(t, err)
+	require.NotNil(t, stored.PublishedAt)
+}
+
+func TestService_Publish_Idempotent(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+	creator := uuid.New()
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  creator,
+		Title:      "Idempotente",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	first, err := svc.Publish(context.Background(), created.ID, creator)
+	require.NoError(t, err)
+	require.NotNil(t, first.PublishedAt)
+
+	second, err := svc.Publish(context.Background(), created.ID, creator)
+	require.NoError(t, err)
+	require.NotNil(t, second.PublishedAt)
+	require.Equal(t, *first.PublishedAt, *second.PublishedAt, "re-publishing keeps the original timestamp")
+}
+
+func TestService_Publish_Foreign(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Ajeno",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.Publish(context.Background(), created.ID, uuid.New())
+	require.ErrorIs(t, err, domain.ErrGiftForbidden)
+
+	// The gift must stay a draft after a rejected publish.
+	stored, err := repo.GetByID(context.Background(), created.ID)
+	require.NoError(t, err)
+	require.Nil(t, stored.PublishedAt)
+}
+
+func TestService_Publish_NotFound(t *testing.T) {
+	svc := NewService(newFakeGiftRepo())
+
+	_, err := svc.Publish(context.Background(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
+}
+
 func TestService_GetByViewToken(t *testing.T) {
 	repo := newFakeGiftRepo()
 	svc := NewService(repo)

@@ -34,6 +34,7 @@ type giftResponse struct {
 	SingleOpen      bool            `json:"single_open"`
 	OpenedAt        *time.Time      `json:"opened_at,omitempty"`
 	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
+	PublishedAt     *time.Time      `json:"published_at,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
@@ -55,6 +56,7 @@ func toGiftResponse(g domain.Gift) giftResponse {
 		SingleOpen:      g.SingleOpen,
 		OpenedAt:        g.OpenedAt,
 		ExpiresAt:       g.ExpiresAt,
+		PublishedAt:     g.PublishedAt,
 		CreatedAt:       g.CreatedAt,
 		UpdatedAt:       g.UpdatedAt,
 	}
@@ -195,6 +197,40 @@ func (s *Server) handleUpdateGift(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, toGiftResponse(gift))
 }
 
+// handlePublishGift handles POST /gifts/{id}/publish: marks the gift as
+// published so its public view token becomes reachable, only for the gift's
+// creator (403 foreign, 404 missing). Idempotent — publishing again is a no-op.
+// Returns the full gift so the client can surface the shareable link.
+func (s *Server) handlePublishGift(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, codeUnauthorized)
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, codeInvalidID)
+		return
+	}
+
+	gift, err := s.gifts.Publish(r.Context(), id, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrGiftNotFound):
+			respondError(w, http.StatusNotFound, codeGiftNotFound)
+		case errors.Is(err, domain.ErrGiftForbidden):
+			respondError(w, http.StatusForbidden, codeForbidden)
+		default:
+			log.Error().Err(err).Msg("publish gift failed")
+			respondError(w, http.StatusInternalServerError, codeInternalError)
+		}
+		return
+	}
+
+	respondJSON(w, http.StatusOK, toGiftResponse(gift))
+}
+
 // handleGetGift handles GET /gifts/{id}, returning the gift only to its creator:
 // 404 if it does not exist, 403 if it belongs to another user.
 func (s *Server) handleGetGift(w http.ResponseWriter, r *http.Request) {
@@ -275,6 +311,7 @@ type giftSummary struct {
 	SingleOpen      bool            `json:"single_open"`
 	OpenedAt        *time.Time      `json:"opened_at,omitempty"`
 	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
+	PublishedAt     *time.Time      `json:"published_at,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
@@ -293,6 +330,7 @@ func toGiftSummary(g domain.Gift) giftSummary {
 		SingleOpen:      g.SingleOpen,
 		OpenedAt:        g.OpenedAt,
 		ExpiresAt:       g.ExpiresAt,
+		PublishedAt:     g.PublishedAt,
 		CreatedAt:       g.CreatedAt,
 		UpdatedAt:       g.UpdatedAt,
 	}

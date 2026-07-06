@@ -29,6 +29,7 @@ CREATE TABLE gifts (
     single_open        boolean NOT NULL DEFAULT false,
     opened_at          timestamptz,
     expires_at         timestamptz,
+    published_at       timestamptz,           -- NULL = borrador (oculto al destinatario); no NULL = publicado
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now()
 );

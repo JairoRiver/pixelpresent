@@ -77,6 +77,7 @@ func (r *GiftRepo) Update(ctx context.Context, g domain.Gift) (domain.Gift, erro
 		ScheduledSendAt: nullTimestamptz(g.ScheduledSendAt),
 		SingleOpen:      g.SingleOpen,
 		ExpiresAt:       nullTimestamptz(g.ExpiresAt),
+		PublishedAt:     nullTimestamptz(g.PublishedAt),
 	})
 	return mapGetGift(updated, err)
 }
@@ -135,6 +136,7 @@ func toDomainGift(g sqlc.Gift) domain.Gift {
 		SingleOpen:      g.SingleOpen,
 		OpenedAt:        timestamptzPtr(g.OpenedAt),
 		ExpiresAt:       timestamptzPtr(g.ExpiresAt),
+		PublishedAt:     timestamptzPtr(g.PublishedAt),
 		CreatedAt:       g.CreatedAt,
 		UpdatedAt:       g.UpdatedAt,
 	}

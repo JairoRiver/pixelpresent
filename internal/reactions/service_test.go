@@ -86,7 +86,8 @@ func newServiceWith(gift domain.Gift) (*Service, *fakeReactionRepo) {
 }
 
 func visibleGift() domain.Gift {
-	return domain.Gift{ID: uuid.New(), Title: "Para ti"}
+	published := time.Now().Add(-time.Hour)
+	return domain.Gift{ID: uuid.New(), Title: "Para ti", PublishedAt: &published}
 }
 
 func TestService_Create_Emoji(t *testing.T) {

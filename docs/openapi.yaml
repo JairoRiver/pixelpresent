@@ -302,6 +302,30 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/GiftNotFound" }
 
+  /gifts/{id}/publish:
+    parameters:
+      - $ref: "#/components/parameters/GiftID"
+    post:
+      tags: [gifts]
+      operationId: publishGift
+      summary: Publish a gift
+      description: >-
+        Marks the gift as published, making it reachable at its public view
+        token. Only for its creator. Idempotent: republishing keeps the original
+        published_at. Until published, GET /g/{view_token} returns 404.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The published gift (carries the shareable view_token).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gift" }
+        "400": { $ref: "#/components/responses/InvalidID" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/GiftNotFound" }
+
   /gifts/{id}/reactions:
     get:
       tags: [gifts]
@@ -432,6 +456,7 @@ components:
         single_open: { type: boolean }
         opened_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time, description: "When published; absent while a draft." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -451,6 +476,7 @@ components:
         single_open: { type: boolean }
         opened_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time, description: "When published; absent while a draft." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

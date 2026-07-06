@@ -37,6 +37,7 @@ type GiftService interface {
 	Create(ctx context.Context, in gifts.CreateInput) (domain.Gift, error)
 	GetOwned(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error)
 	UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in gifts.UpdateInput) (domain.Gift, error)
+	Publish(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error)
 	DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error
 	ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error)
 	GetByViewToken(ctx context.Context, token string) (domain.Gift, error)
@@ -96,6 +97,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/gifts", s.handleListGifts)
 			r.Get("/gifts/{id}", s.handleGetGift)
 			r.Put("/gifts/{id}", s.handleUpdateGift)
+			r.Post("/gifts/{id}/publish", s.handlePublishGift)
 			r.Delete("/gifts/{id}", s.handleDeleteGift)
 			r.Get("/gifts/{id}/reactions", s.handleListReactions)
 		})

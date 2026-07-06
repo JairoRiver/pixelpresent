@@ -28,8 +28,10 @@ SELECT EXISTS (
 -- name: UpdateGift :one
 -- Full-replace of the creator-editable fields (the editor holds the whole gift
 -- state): passing NULL clears a nullable field. view_token, creator_id and
--- created_at are immutable; updated_at is bumped. Ownership is enforced in the
--- service, not here.
+-- created_at are immutable; updated_at is bumped. published_at is server-managed
+-- (set on publish) but written here too so the service can flip it while
+-- preserving the rest of the row; the service is what decides its value.
+-- Ownership is enforced in the service, not here.
 UPDATE gifts SET
     title             = @title,
     message           = @message,
@@ -41,6 +43,7 @@ UPDATE gifts SET
     scheduled_send_at = @scheduled_send_at,
     single_open       = @single_open,
     expires_at        = @expires_at,
+    published_at      = @published_at,
     updated_at        = now()
 WHERE id = @id
 RETURNING *;

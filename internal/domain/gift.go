@@ -27,8 +27,11 @@ type Gift struct {
 	SingleOpen      bool
 	OpenedAt        *time.Time
 	ExpiresAt       *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// PublishedAt is when the creator published the gift (nil = still a draft,
+	// hidden from recipients). It is server-managed, set once on publish.
+	PublishedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // GiftRepository persists and retrieves gifts. Create and Update return the

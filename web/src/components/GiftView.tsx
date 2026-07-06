@@ -1,12 +1,14 @@
+import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { deserializeCanvas, render, sizeCanvas, toPNGDataURL } from '../lib/canvas';
+import { CalendarXIcon, ClockIcon, GiftIcon, MailOpenIcon } from './icons';
 import ThemeToggle from './ThemeToggle';
 
 // GiftView is the public, recipient-facing page (PP-57): it reads the view token
 // from the /g/{token} URL and consumes GET /api/g/{view_token}, which applies the
-// visibility gate and returns a state discriminator. For now it renders the gift
-// directly when visible and a short message for each gate state; the reveal
-// animation (Fase 6, PP-59+) and richer gate screens (PP-58) build on top.
+// visibility gate and returns a state discriminator. When the gift is visible it
+// renders the drawing directly; each non-visible outcome gets its own dedicated
+// gate screen (PP-58). The reveal animation (Fase 6, PP-59+) builds on top.
 
 type State =
   | 'loading'
@@ -60,6 +62,40 @@ function fileName(title: string): string {
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-+|-+$/g, '');
   return `${slug || 'pixel-present'}.png`;
+}
+
+// GateScreen is the shared layout for every non-visible outcome (PP-58): an icon
+// in a tinted disc, a headline and a supporting line. `tone` picks the accent so
+// each state reads differently at a glance — neutral slate for a normal "not yet"
+// or "already opened", a warmer amber for the terminal "expired".
+type Tone = 'neutral' | 'warn';
+
+function GateScreen({
+  icon,
+  title,
+  children,
+  tone = 'neutral',
+}: {
+  icon: JSX.Element;
+  title: string;
+  children?: JSX.Element | string;
+  tone?: Tone;
+}) {
+  const disc =
+    tone === 'warn'
+      ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300'
+      : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300';
+  return (
+    <div class="flex max-w-sm flex-col items-center gap-4 text-center">
+      <span class={`flex h-16 w-16 items-center justify-center rounded-full ${disc}`}>
+        {icon}
+      </span>
+      <h1 class="text-xl font-semibold text-slate-800 dark:text-slate-100">{title}</h1>
+      {children && (
+        <p class="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{children}</p>
+      )}
+    </div>
+  );
 }
 
 export default function GiftView() {
@@ -162,34 +198,34 @@ export default function GiftView() {
       )}
 
       {state === 'not_yet_open' && (
-        <div class="max-w-md text-center">
-          <p class="text-lg font-semibold text-slate-800 dark:text-slate-100">
-            Este regalo aún no está disponible.
-          </p>
-          {openAt && (
-            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Podrás abrirlo a partir del {formatDate(openAt)}.
-            </p>
-          )}
-        </div>
+        <GateScreen icon={<ClockIcon class="h-8 w-8" />} title="Este regalo aún no está listo">
+          {openAt
+            ? `Vuelve el ${formatDate(openAt)} para abrirlo. Alguien lo preparó para que llegue en su momento.`
+            : 'Todavía no ha llegado el momento de abrirlo. Vuelve un poco más tarde.'}
+        </GateScreen>
       )}
 
       {state === 'expired' && (
-        <p class="max-w-md text-center text-lg font-semibold text-slate-800 dark:text-slate-100">
-          Este regalo ha caducado.
-        </p>
+        <GateScreen
+          icon={<CalendarXIcon class="h-8 w-8" />}
+          title="Este regalo ha caducado"
+          tone="warn"
+        >
+          El plazo para abrirlo ya pasó y su contenido dejó de estar disponible.
+        </GateScreen>
       )}
 
       {state === 'already_opened' && (
-        <p class="max-w-md text-center text-lg font-semibold text-slate-800 dark:text-slate-100">
-          Este regalo ya se abrió.
-        </p>
+        <GateScreen icon={<MailOpenIcon class="h-8 w-8" />} title="Este regalo ya se abrió">
+          Era un regalo de un solo uso y ya se disfrutó una vez. Ese momento fue único.
+        </GateScreen>
       )}
 
       {state === 'notfound' && (
-        <p class="max-w-md text-center text-lg font-semibold text-slate-800 dark:text-slate-100">
-          No encontramos este regalo.
-        </p>
+        <GateScreen icon={<GiftIcon class="h-8 w-8" />} title="No encontramos este regalo">
+          El enlace puede estar incompleto o el regalo ya no existe. Comprueba que lo copiaste
+          entero.
+        </GateScreen>
       )}
 
       {state === 'error' && (

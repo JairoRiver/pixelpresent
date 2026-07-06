@@ -10,6 +10,7 @@ interface GiftSummary {
   sent_at?: string;
   single_open: boolean;
   opened_at?: string;
+  published_at?: string | null;
   created_at: string;
 }
 
@@ -26,11 +27,13 @@ function formatDate(iso: string): string {
   });
 }
 
+// A draft (never published) vs a live gift; once published it may also have been
+// opened. Publication is what makes the public link reachable, so it drives both
+// the label and whether the "open link" action is shown.
 function statusLabel(gift: GiftSummary): string {
+  if (gift.published_at == null) return 'Borrador';
   if (gift.opened_at) return 'Abierto';
-  if (gift.sent_at) return 'Enviado';
-  if (gift.scheduled_send_at) return 'Programado';
-  return 'Borrador';
+  return 'Publicado';
 }
 
 export default function DashboardGifts() {
@@ -108,12 +111,14 @@ export default function DashboardGifts() {
             >
               Editar
             </a>
-            <a
-              href={`/g/${gift.view_token}`}
-              class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-            >
-              Abrir enlace público →
-            </a>
+            {gift.published_at != null && (
+              <a
+                href={`/g/${gift.view_token}`}
+                class="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                Abrir enlace público →
+              </a>
+            )}
           </div>
         </li>
       ))}

@@ -13,6 +13,10 @@ type Visibility int
 const (
 	// Visible: the gift can be shown.
 	Visible Visibility = iota
+	// NotPublished: still a draft; the creator has not published it yet. To a
+	// recipient it is indistinguishable from a missing gift (the public endpoint
+	// maps it to 404).
+	NotPublished
 	// NotYetOpen: scheduled_open_at is still in the future.
 	NotYetOpen
 	// Expired: expires_at has passed.
@@ -25,6 +29,8 @@ func (v Visibility) String() string {
 	switch v {
 	case Visible:
 		return "visible"
+	case NotPublished:
+		return "not_published"
 	case NotYetOpen:
 		return "not_yet_open"
 	case Expired:
@@ -42,8 +48,13 @@ func (v Visibility) String() string {
 //
 // Precedence when more than one gate would fail (only reachable through
 // misconfiguration, e.g. an expiry before the open time, which gift validation
-// prevents): not-yet-open, then expired, then already-opened.
+// prevents): not-published, then not-yet-open, then expired, then already-opened.
+// A draft short-circuits everything: an unpublished gift never reveals its
+// scheduling to a recipient.
 func CheckVisibility(g domain.Gift, now time.Time) Visibility {
+	if g.PublishedAt == nil {
+		return NotPublished
+	}
 	if g.ScheduledOpenAt != nil && now.Before(*g.ScheduledOpenAt) {
 		return NotYetOpen
 	}

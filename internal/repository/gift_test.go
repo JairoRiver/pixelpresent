@@ -69,7 +69,29 @@ func TestGiftRepo_Create(t *testing.T) {
 	require.Nil(t, gift.SentAt)
 	require.Nil(t, gift.OpenedAt)
 	require.Nil(t, gift.ExpiresAt)
+	require.Nil(t, gift.PublishedAt, "a freshly created gift is a draft")
 	require.False(t, gift.CreatedAt.IsZero())
+}
+
+// A gift is created as a draft; Update carries published_at, and it round-trips
+// through the public read path (the recipient-facing GetByViewToken).
+func TestGiftRepo_Update_PublishedAtRoundTrip(t *testing.T) {
+	tx := dbtest.Tx(t)
+	repo := NewGiftRepo(tx)
+	created := createTestGift(t, tx)
+	require.Nil(t, created.PublishedAt)
+
+	publishedAt := time.Now()
+	created.PublishedAt = &publishedAt
+	updated, err := repo.Update(context.Background(), created)
+	require.NoError(t, err)
+	require.NotNil(t, updated.PublishedAt)
+	require.WithinDuration(t, publishedAt, *updated.PublishedAt, time.Second)
+
+	got, err := repo.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.NotNil(t, got.PublishedAt)
+	require.WithinDuration(t, publishedAt, *got.PublishedAt, time.Second)
 }
 
 func TestGiftRepo_Create_DefaultsRevealConfig(t *testing.T) {

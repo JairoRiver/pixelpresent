@@ -132,6 +132,26 @@ func (s *Service) UpdateOwned(ctx context.Context, id, ownerID uuid.UUID, in Upd
 	return s.repo.Update(ctx, gift)
 }
 
+// Publish marks the gift with id as published, making it reachable at its public
+// view token, only if ownerID is its creator. It is idempotent: a gift that is
+// already published keeps its original published_at and is returned unchanged.
+// Same error contract as GetOwned.
+func (s *Service) Publish(ctx context.Context, id, ownerID uuid.UUID) (domain.Gift, error) {
+	gift, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return domain.Gift{}, err
+	}
+	if gift.CreatorID != ownerID {
+		return domain.Gift{}, domain.ErrGiftForbidden
+	}
+	if gift.PublishedAt != nil {
+		return gift, nil
+	}
+	now := time.Now()
+	gift.PublishedAt = &now
+	return s.repo.Update(ctx, gift)
+}
+
 // ListByOwner returns every gift created by ownerID (newest first), for the
 // creator's dashboard.
 func (s *Service) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error) {

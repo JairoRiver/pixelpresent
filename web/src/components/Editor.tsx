@@ -115,6 +115,8 @@ interface GiftData {
   expires_at?: string | null;
   // Always present in the API response (PP-53).
   single_open?: boolean;
+  // When the gift was published; absent while it is still a draft.
+  published_at?: string | null;
 }
 
 function giftIdFromURL(): string | null {
@@ -179,6 +181,12 @@ export default function Editor() {
   const [viewToken, setViewToken] = useState<string | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Draft vs published: saving only persists a draft; the gift becomes reachable
+  // at its public URL only after an explicit publish. isPublished tracks whether
+  // that has happened (seeded on load, set after publishing); publishState drives
+  // the publish button's in-flight/error feedback.
+  const [isPublished, setIsPublished] = useState(false);
+  const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'error'>('idle');
   // reveal_type/reveal_config aren't editable yet (confetti is the only MVP
   // mechanic). Held so a full-replace update (PUT) preserves whatever a loaded
   // gift already had instead of resetting it. New gifts default to confetti.
@@ -301,11 +309,16 @@ export default function Editor() {
   // POST a new gift or PUT the existing one. On the first create we capture the
   // id and reflect it in the URL so a reload edits the same gift (the round-trip
   // the DoD asks for). Save is disabled while in flight to avoid double submits.
-  async function save() {
+  //
+  // Saving only persists a draft — it never publishes and never surfaces the
+  // share link (that is the explicit "Publicar" action). Returns the gift id on
+  // success (so the publish flow can save-then-publish a brand-new gift), or null
+  // on failure.
+  async function save(): Promise<string | null> {
     if (title.trim() === '') {
       setSaveError('El título es obligatorio.');
       setSaveState('error');
-      return;
+      return null;
     }
     setSaveState('saving');
     setSaveError('');
@@ -332,29 +345,29 @@ export default function Editor() {
 
       if (res.status === 401) {
         window.location.replace('/login');
-        return;
+        return null;
       }
       if (res.status === 400) {
         setSaveError('Revisa los campos del regalo.');
         setSaveState('error');
-        return;
+        return null;
       }
       if (res.status === 403 || res.status === 404) {
         setSaveError('Ese regalo no existe o no es tuyo.');
         setSaveState('error');
-        return;
+        return null;
       }
       if (!res.ok) {
         setSaveError('No se pudo guardar. Inténtalo de nuevo.');
         setSaveState('error');
-        return;
+        return null;
       }
 
       // POST returns {id, view_token}; PUT returns the full gift. Adopt the id on
       // first create so later saves update in place, and mirror it into the URL.
       const data = (await res.json()) as { id?: string; view_token?: string };
-      const isCreate = !giftId;
-      if (isCreate && data.id) {
+      const savedId = giftId ?? data.id ?? null;
+      if (!giftId && data.id) {
         setGiftId(data.id);
         const next = new URL(window.location.href);
         next.searchParams.set('id', data.id);
@@ -362,12 +375,50 @@ export default function Editor() {
       }
       if (data.view_token) setViewToken(data.view_token);
       setSaveState('saved');
-      // First publish: surface the shareable link right away (PP-56). Later saves
-      // just confirm with "Guardado ✓"; the link stays reachable via "Compartir".
-      if (isCreate && data.view_token) setShowPublish(true);
+      return savedId;
     } catch {
       setSaveError('No se pudo guardar. Comprueba tu conexión.');
       setSaveState('error');
+      return null;
+    }
+  }
+
+  // Publish the gift (draft → live): make it reachable at its public URL and then
+  // surface the share link. A brand-new gift is saved first (to get an id); an
+  // already-saved one is persisted again so publishing includes the latest edits.
+  // Publishing is idempotent server-side, so re-opening the share modal is safe.
+  async function publish() {
+    setPublishState('publishing');
+    const id = await save();
+    if (!id) {
+      // save() already set the save error/state; surface a publish error too.
+      setPublishState('error');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/gifts/${id}/publish`, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
+      if (res.status === 401) {
+        window.location.replace('/login');
+        return;
+      }
+      if (!res.ok) {
+        setSaveError('No se pudo publicar. Inténtalo de nuevo.');
+        setSaveState('error');
+        setPublishState('error');
+        return;
+      }
+      const gift = (await res.json()) as GiftData;
+      if (gift.view_token) setViewToken(gift.view_token);
+      setIsPublished(true);
+      setPublishState('idle');
+      setShowPublish(true);
+    } catch {
+      setSaveError('No se pudo publicar. Comprueba tu conexión.');
+      setSaveState('error');
+      setPublishState('error');
     }
   }
 
@@ -465,6 +516,7 @@ export default function Editor() {
         if (gift.reveal_type) revealTypeRef.current = gift.reveal_type;
         if (gift.reveal_config !== undefined) revealConfigRef.current = gift.reveal_config;
         if (gift.view_token) setViewToken(gift.view_token);
+        setIsPublished(gift.published_at != null);
         // Load the saved drawing into the model (PP-54 round-trip). On malformed
         // pixel_art, keep the blank starter grid rather than trust bad data.
         // Set the model before status flips to 'ready' so the drawing effect
@@ -751,13 +803,22 @@ export default function Editor() {
           >
             {saveState === 'saving' ? 'Guardando…' : 'Guardar'}
           </button>
-          {viewToken && (
+          {isPublished ? (
             <button
               type="button"
               onClick={() => setShowPublish(true)}
               class="rounded-md border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-white/15 dark:text-slate-300 dark:hover:border-white/30"
             >
-              Compartir
+              Ver enlace
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={publish}
+              disabled={publishState === 'publishing'}
+              class="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+            >
+              {publishState === 'publishing' ? 'Publicando…' : 'Publicar y compartir'}
             </button>
           )}
           <ThemeToggle />

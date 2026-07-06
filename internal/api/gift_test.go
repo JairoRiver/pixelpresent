@@ -37,6 +37,10 @@ type fakeGiftService struct {
 	updateOut   domain.Gift
 	updateErr   error
 
+	publishCalls int
+	publishOut   domain.Gift
+	publishErr   error
+
 	deleteCalls int
 	deleteErr   error
 
@@ -70,6 +74,13 @@ func (f *fakeGiftService) UpdateOwned(_ context.Context, id, ownerID uuid.UUID, 
 	f.gotOwner = ownerID
 	f.gotUpdate = in
 	return f.updateOut, f.updateErr
+}
+
+func (f *fakeGiftService) Publish(_ context.Context, id, ownerID uuid.UUID) (domain.Gift, error) {
+	f.publishCalls++
+	f.gotID = id
+	f.gotOwner = ownerID
+	return f.publishOut, f.publishErr
 }
 
 func (f *fakeGiftService) DeleteOwned(_ context.Context, id, ownerID uuid.UUID) error {
@@ -383,6 +394,86 @@ func TestUpdateGift_InvalidBody(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Equal(t, codeInvalidRevealType, decodeErrorCode(t, rec))
 	require.Zero(t, fake.updateCalls)
+}
+
+// --- POST /gifts/{id}/publish ---
+
+// publishGift sends POST /gifts/{id}/publish with a valid session cookie.
+func publishGift(t *testing.T, gift GiftService, sessions *auth.SessionManager, userID uuid.UUID, id string) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, sessions, gift, nil)
+
+	issue := httptest.NewRecorder()
+	sessions.SetCookie(issue, userID)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/gifts/"+id+"/publish", nil)
+	req.AddCookie(issue.Result().Cookies()[0])
+
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestPublishGift_RequiresSession(t *testing.T) {
+	fake := &fakeGiftService{}
+	srv := NewServer(nil, giftSessions(), fake, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/gifts/"+uuid.NewString()+"/publish", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, fake.publishCalls)
+}
+
+func TestPublishGift_Own(t *testing.T) {
+	userID := uuid.New()
+	giftID := uuid.New()
+	published := time.Now()
+	fake := &fakeGiftService{publishOut: domain.Gift{
+		ID:          giftID,
+		CreatorID:   userID,
+		Title:       "Publicado",
+		ViewToken:   "tok-pub",
+		PublishedAt: &published,
+	}}
+
+	rec := publishGift(t, fake, giftSessions(), userID, giftID.String())
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, fake.publishCalls)
+	require.Equal(t, giftID, fake.gotID)
+	require.Equal(t, userID, fake.gotOwner)
+
+	var resp giftResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "tok-pub", resp.ViewToken, "the response carries the shareable token")
+	require.NotNil(t, resp.PublishedAt)
+}
+
+func TestPublishGift_Foreign(t *testing.T) {
+	fake := &fakeGiftService{publishErr: domain.ErrGiftForbidden}
+	rec := publishGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, codeForbidden, decodeErrorCode(t, rec))
+}
+
+func TestPublishGift_NotFound(t *testing.T) {
+	fake := &fakeGiftService{publishErr: domain.ErrGiftNotFound}
+	rec := publishGift(t, fake, giftSessions(), uuid.New(), uuid.NewString())
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
+}
+
+func TestPublishGift_InvalidID(t *testing.T) {
+	fake := &fakeGiftService{}
+	rec := publishGift(t, fake, giftSessions(), uuid.New(), "not-a-uuid")
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, codeInvalidID, decodeErrorCode(t, rec))
+	require.Zero(t, fake.publishCalls)
 }
 
 // --- DELETE /gifts/{id} ---

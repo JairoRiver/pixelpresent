@@ -42,6 +42,7 @@ func TestViewGift_Visible(t *testing.T) {
 		RevealConfig:   json.RawMessage(`{"speed":1}`),
 		ViewToken:      "secret-token",
 		RecipientEmail: strPtr("recipient@example.com"),
+		PublishedAt:    ptrTime(time.Now().Add(-time.Hour)),
 	}}
 
 	rec := viewGift(t, fake, "secret-token")
@@ -67,6 +68,7 @@ func TestViewGift_NotYetOpen(t *testing.T) {
 	fake := &fakeGiftService{viewOut: domain.Gift{
 		Title:           "Sorpresa",
 		ScheduledOpenAt: ptrTime(openAt),
+		PublishedAt:     ptrTime(time.Now().Add(-time.Hour)),
 	}}
 
 	rec := viewGift(t, fake, "tok")
@@ -81,8 +83,9 @@ func TestViewGift_NotYetOpen(t *testing.T) {
 
 func TestViewGift_Expired(t *testing.T) {
 	fake := &fakeGiftService{viewOut: domain.Gift{
-		Title:     "Caducado",
-		ExpiresAt: ptrTime(time.Now().Add(-time.Hour)),
+		Title:       "Caducado",
+		ExpiresAt:   ptrTime(time.Now().Add(-time.Hour)),
+		PublishedAt: ptrTime(time.Now().Add(-2 * time.Hour)),
 	}}
 
 	rec := viewGift(t, fake, "tok")
@@ -95,9 +98,10 @@ func TestViewGift_Expired(t *testing.T) {
 
 func TestViewGift_AlreadyOpened(t *testing.T) {
 	fake := &fakeGiftService{viewOut: domain.Gift{
-		Title:      "Visto",
-		SingleOpen: true,
-		OpenedAt:   ptrTime(time.Now().Add(-time.Minute)),
+		Title:       "Visto",
+		SingleOpen:  true,
+		OpenedAt:    ptrTime(time.Now().Add(-time.Minute)),
+		PublishedAt: ptrTime(time.Now().Add(-time.Hour)),
 	}}
 
 	rec := viewGift(t, fake, "tok")
@@ -106,6 +110,22 @@ func TestViewGift_AlreadyOpened(t *testing.T) {
 	resp := decodePublic(t, rec)
 	require.Equal(t, stateAlreadyOpened, resp.State)
 	require.Nil(t, resp.Gift)
+}
+
+// A draft (published_at nil) is hidden from recipients: the public endpoint
+// returns 404, indistinguishable from a missing gift, so unpublished gifts can't
+// be probed via their token.
+func TestViewGift_DraftIsNotFound(t *testing.T) {
+	fake := &fakeGiftService{viewOut: domain.Gift{
+		Title:     "Borrador",
+		ViewToken: "draft-token",
+		// PublishedAt left nil: still a draft.
+	}}
+
+	rec := viewGift(t, fake, "draft-token")
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
 }
 
 func TestViewGift_NotFound(t *testing.T) {

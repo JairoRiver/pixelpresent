@@ -70,6 +70,9 @@ func (s *Server) handleViewGift(w http.ResponseWriter, r *http.Request) {
 	switch gifts.CheckVisibility(gift, time.Now()) {
 	case gifts.Visible:
 		respondJSON(w, http.StatusOK, publicGiftResponse{State: stateVisible, Gift: toPublicGift(gift)})
+	case gifts.NotPublished:
+		// A draft is hidden from recipients: indistinguishable from a missing gift.
+		respondError(w, http.StatusNotFound, codeGiftNotFound)
 	case gifts.NotYetOpen:
 		respondJSON(w, http.StatusOK, publicGiftResponse{State: stateNotYetOpen, ScheduledOpenAt: gift.ScheduledOpenAt})
 	case gifts.Expired:
