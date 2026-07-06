@@ -216,6 +216,43 @@ func (q *Queries) ListGiftsByUser(ctx context.Context, creatorID uuid.UUID) ([]G
 	return items, nil
 }
 
+const markGiftOpened = `-- name: MarkGiftOpened :one
+UPDATE gifts
+SET opened_at = now(), updated_at = now()
+WHERE view_token = $1 AND opened_at IS NULL
+RETURNING id, creator_id, title, message, pixel_art, reveal_type, reveal_config, view_token, recipient_email, scheduled_open_at, scheduled_send_at, sent_at, single_open, opened_at, expires_at, published_at, created_at, updated_at
+`
+
+// Atomic single-open guard (mirrors MarkMagicLinkConsumed): sets opened_at only
+// while it is still NULL, so the first reveal wins and concurrent or repeat calls
+// match no row. A no-rows result means either the gift is already opened or the
+// token is unknown; the caller checks existence separately to tell them apart.
+func (q *Queries) MarkGiftOpened(ctx context.Context, viewToken string) (Gift, error) {
+	row := q.db.QueryRow(ctx, markGiftOpened, viewToken)
+	var i Gift
+	err := row.Scan(
+		&i.ID,
+		&i.CreatorID,
+		&i.Title,
+		&i.Message,
+		&i.PixelArt,
+		&i.RevealType,
+		&i.RevealConfig,
+		&i.ViewToken,
+		&i.RecipientEmail,
+		&i.ScheduledOpenAt,
+		&i.ScheduledSendAt,
+		&i.SentAt,
+		&i.SingleOpen,
+		&i.OpenedAt,
+		&i.ExpiresAt,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateGift = `-- name: UpdateGift :one
 UPDATE gifts SET
     title             = $1,

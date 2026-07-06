@@ -53,6 +53,10 @@ type fakeGiftService struct {
 	gotToken  string
 	viewOut   domain.Gift
 	viewErr   error
+
+	openCalls int
+	openToken string
+	openErr   error
 }
 
 func (f *fakeGiftService) Create(_ context.Context, in gifts.CreateInput) (domain.Gift, error) {
@@ -100,6 +104,11 @@ func (f *fakeGiftService) GetByViewToken(_ context.Context, token string) (domai
 	f.viewCalls++
 	f.gotToken = token
 	return f.viewOut, f.viewErr
+}
+func (f *fakeGiftService) MarkOpened(_ context.Context, token string) error {
+	f.openCalls++
+	f.openToken = token
+	return f.openErr
 }
 
 const giftTestSecret = "gift-secret"

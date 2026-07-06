@@ -41,6 +41,7 @@ type GiftService interface {
 	DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error
 	ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]domain.Gift, error)
 	GetByViewToken(ctx context.Context, token string) (domain.Gift, error)
+	MarkOpened(ctx context.Context, token string) error
 }
 
 // ReactionService is the slice of the reaction service the API depends on.
@@ -87,6 +88,7 @@ func (s *Server) Routes() http.Handler {
 
 		// Public recipient-facing routes addressed by the shareable token (no session).
 		r.Get("/g/{view_token}", s.handleViewGift)
+		r.Post("/g/{view_token}/opened", s.handleMarkGiftOpened)
 		r.Post("/g/{view_token}/reactions", s.handleCreateReaction)
 
 		// Routes requiring an authenticated creator session.

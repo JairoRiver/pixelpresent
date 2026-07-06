@@ -28,6 +28,11 @@ type Querier interface {
 	// Borrar las reacciones al borrar el regalo lo cubre la FK ON DELETE CASCADE;
 	// el borrado de una reacción individual (moderación) queda pendiente de diseño.
 	ListReactionsByGift(ctx context.Context, giftID uuid.UUID) ([]Reaction, error)
+	// Atomic single-open guard (mirrors MarkMagicLinkConsumed): sets opened_at only
+	// while it is still NULL, so the first reveal wins and concurrent or repeat calls
+	// match no row. A no-rows result means either the gift is already opened or the
+	// token is unknown; the caller checks existence separately to tell them apart.
+	MarkGiftOpened(ctx context.Context, viewToken string) (Gift, error)
 	MarkMagicLinkConsumed(ctx context.Context, id uuid.UUID) (MagicLink, error)
 	// Full-replace of the creator-editable fields (the editor holds the whole gift
 	// state): passing NULL clears a nullable field. view_token, creator_id and

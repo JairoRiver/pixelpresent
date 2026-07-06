@@ -135,3 +135,33 @@ func TestViewGift_NotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code)
 	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
 }
+
+// markOpened sends the public POST /g/{token}/opened (no session).
+func markOpened(t *testing.T, gift GiftService, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := NewServer(nil, giftSessions(), gift, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/g/"+token+"/opened", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestMarkGiftOpened_Success(t *testing.T) {
+	fake := &fakeGiftService{}
+
+	rec := markOpened(t, fake, "secret-token")
+
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	require.Empty(t, rec.Body.String())
+	require.Equal(t, 1, fake.openCalls)
+	require.Equal(t, "secret-token", fake.openToken)
+}
+
+func TestMarkGiftOpened_NotFound(t *testing.T) {
+	fake := &fakeGiftService{openErr: domain.ErrGiftNotFound}
+
+	rec := markOpened(t, fake, uuid.NewString())
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, codeGiftNotFound, decodeErrorCode(t, rec))
+}

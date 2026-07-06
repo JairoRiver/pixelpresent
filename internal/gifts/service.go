@@ -164,6 +164,22 @@ func (s *Service) GetByViewToken(ctx context.Context, token string) (domain.Gift
 	return s.repo.GetByViewToken(ctx, token)
 }
 
+// MarkOpened records that the gift addressed by the public view token has been
+// opened — the reveal frontend calls it when the reveal animation completes. It
+// sets opened_at the first time only; a second call is an idempotent no-op that
+// leaves the original timestamp untouched (this is what flips a single_open gift
+// to AlreadyOpened on the next view). Returns domain.ErrGiftNotFound for an
+// unknown token.
+func (s *Service) MarkOpened(ctx context.Context, token string) error {
+	// Existence check first so an unknown token is a 404, distinct from an
+	// already-opened gift (both of which make the atomic UPDATE match no row).
+	if _, err := s.repo.GetByViewToken(ctx, token); err != nil {
+		return err
+	}
+	_, err := s.repo.MarkOpened(ctx, token)
+	return err
+}
+
 // DeleteOwned removes the gift with id, only if ownerID is its creator. Same
 // error contract as GetOwned.
 func (s *Service) DeleteOwned(ctx context.Context, id, ownerID uuid.UUID) error {

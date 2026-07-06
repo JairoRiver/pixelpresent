@@ -48,6 +48,7 @@ func (f *fakeGiftRepo) ListByUser(context.Context, uuid.UUID) ([]domain.Gift, er
 	return nil, nil
 }
 func (f *fakeGiftRepo) ViewTokenExists(context.Context, string) (bool, error) { return false, nil }
+func (f *fakeGiftRepo) MarkOpened(context.Context, string) (bool, error)      { return false, nil }
 
 // fakeReactionRepo is an in-memory domain.ReactionRepository.
 type fakeReactionRepo struct {

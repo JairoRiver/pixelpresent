@@ -81,3 +81,24 @@ func (s *Server) handleViewGift(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, publicGiftResponse{State: stateAlreadyOpened})
 	}
 }
+
+// handleMarkGiftOpened handles the public POST /g/{view_token}/opened: the reveal
+// frontend's signal that the reveal animation finished. It marks opened_at the
+// first time only (atomic single-open guard) and is an idempotent no-op on
+// repeat, so a single_open gift becomes already_opened for later visits. 204 on
+// success, 404 for an unknown token.
+func (s *Server) handleMarkGiftOpened(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "view_token")
+
+	if err := s.gifts.MarkOpened(r.Context(), token); err != nil {
+		if errors.Is(err, domain.ErrGiftNotFound) {
+			respondError(w, http.StatusNotFound, codeGiftNotFound)
+			return
+		}
+		log.Error().Err(err).Msg("mark gift opened failed")
+		respondError(w, http.StatusInternalServerError, codeInternalError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

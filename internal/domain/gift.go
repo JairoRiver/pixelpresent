@@ -41,6 +41,12 @@ type GiftRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (Gift, error)
 	GetByViewToken(ctx context.Context, token string) (Gift, error)
 	Update(ctx context.Context, g Gift) (Gift, error)
+	// MarkOpened atomically sets opened_at to now() for the gift with the given
+	// view token, but only if it was still NULL. It reports whether a row was
+	// updated (false = the gift was already opened, an idempotent no-op). It does
+	// not distinguish an unknown token from an already-opened gift; the caller
+	// checks existence separately.
+	MarkOpened(ctx context.Context, token string) (bool, error)
 	// Delete removes the gift with id (media and reactions cascade). It returns
 	// ErrGiftNotFound if no gift had that id.
 	Delete(ctx context.Context, id uuid.UUID) error

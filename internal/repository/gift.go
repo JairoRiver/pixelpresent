@@ -82,6 +82,19 @@ func (r *GiftRepo) Update(ctx context.Context, g domain.Gift) (domain.Gift, erro
 	return mapGetGift(updated, err)
 }
 
+func (r *GiftRepo) MarkOpened(ctx context.Context, token string) (bool, error) {
+	_, err := r.q.MarkGiftOpened(ctx, token)
+	if err != nil {
+		// No row matched: the gift is already opened (opened_at was not NULL) or
+		// the token is unknown. Both are a no-op here; the service disambiguates.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *GiftRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	rows, err := r.q.DeleteGift(ctx, id)
 	if err != nil {

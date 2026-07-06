@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/JairoRiver/pixelpresent/internal/domain"
 	"github.com/google/uuid"
@@ -79,6 +80,22 @@ func (f *fakeGiftRepo) ViewTokenExists(_ context.Context, token string) (bool, e
 	return f.tokens[token], nil
 }
 
+func (f *fakeGiftRepo) MarkOpened(_ context.Context, token string) (bool, error) {
+	for id, g := range f.byID {
+		if g.ViewToken != token {
+			continue
+		}
+		if g.OpenedAt != nil {
+			return false, nil // already opened: atomic guard matches no row
+		}
+		now := time.Now()
+		g.OpenedAt = &now
+		f.byID[id] = g
+		return true, nil
+	}
+	return false, nil // unknown token: no row updated
+}
+
 func TestService_Create(t *testing.T) {
 	repo := newFakeGiftRepo()
 	svc := NewService(repo)
@@ -99,6 +116,38 @@ func TestService_Create(t *testing.T) {
 	stored, err := repo.GetByID(context.Background(), gift.ID)
 	require.NoError(t, err)
 	require.Equal(t, gift.ViewToken, stored.ViewToken)
+}
+
+func TestService_MarkOpened(t *testing.T) {
+	repo := newFakeGiftRepo()
+	svc := NewService(repo)
+
+	created, err := svc.Create(context.Background(), CreateInput{
+		CreatorID:  uuid.New(),
+		Title:      "Una sola vez",
+		PixelArt:   json.RawMessage(`{}`),
+		RevealType: "box",
+		SingleOpen: true,
+	})
+	require.NoError(t, err)
+
+	// First open marks opened_at.
+	require.NoError(t, svc.MarkOpened(context.Background(), created.ViewToken))
+	opened, err := svc.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.NotNil(t, opened.OpenedAt)
+
+	// Second open is an idempotent no-op that keeps the original timestamp.
+	require.NoError(t, svc.MarkOpened(context.Background(), created.ViewToken))
+	again, err := svc.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.Equal(t, *opened.OpenedAt, *again.OpenedAt)
+}
+
+func TestService_MarkOpened_UnknownToken(t *testing.T) {
+	svc := NewService(newFakeGiftRepo())
+	err := svc.MarkOpened(context.Background(), "nope")
+	require.ErrorIs(t, err, domain.ErrGiftNotFound)
 }
 
 func TestService_GetOwned_Own(t *testing.T) {

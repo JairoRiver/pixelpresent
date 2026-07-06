@@ -48,6 +48,16 @@ UPDATE gifts SET
 WHERE id = @id
 RETURNING *;
 
+-- name: MarkGiftOpened :one
+-- Atomic single-open guard (mirrors MarkMagicLinkConsumed): sets opened_at only
+-- while it is still NULL, so the first reveal wins and concurrent or repeat calls
+-- match no row. A no-rows result means either the gift is already opened or the
+-- token is unknown; the caller checks existence separately to tell them apart.
+UPDATE gifts
+SET opened_at = now(), updated_at = now()
+WHERE view_token = @view_token AND opened_at IS NULL
+RETURNING *;
+
 -- name: ListGiftsByUser :many
 SELECT * FROM gifts
 WHERE creator_id = $1

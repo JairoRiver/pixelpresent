@@ -94,6 +94,46 @@ func TestGiftRepo_Update_PublishedAtRoundTrip(t *testing.T) {
 	require.WithinDuration(t, publishedAt, *got.PublishedAt, time.Second)
 }
 
+// MarkOpened sets opened_at the first time and is an idempotent no-op after: the
+// atomic guard reports whether it wrote, and the second call must not move the
+// timestamp (this is what makes a single_open gift stay "already opened").
+func TestGiftRepo_MarkOpened(t *testing.T) {
+	tx := dbtest.Tx(t)
+	repo := NewGiftRepo(tx)
+	created := createTestGift(t, tx)
+	require.Nil(t, created.OpenedAt, "a fresh gift is unopened")
+
+	// First open writes opened_at.
+	updated, err := repo.MarkOpened(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.True(t, updated, "the first open updates a row")
+
+	first, err := repo.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.NotNil(t, first.OpenedAt)
+
+	// Second open is a no-op: no row updated, timestamp untouched.
+	updated, err = repo.MarkOpened(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.False(t, updated, "a second open matches no row")
+
+	second, err := repo.GetByViewToken(context.Background(), created.ViewToken)
+	require.NoError(t, err)
+	require.NotNil(t, second.OpenedAt)
+	require.Equal(t, *first.OpenedAt, *second.OpenedAt, "opened_at is not overwritten")
+}
+
+// An unknown token matches no row, same as an already-opened gift: no update, no
+// error. Telling the two apart is the service's job (existence check → 404).
+func TestGiftRepo_MarkOpened_UnknownToken(t *testing.T) {
+	tx := dbtest.Tx(t)
+	repo := NewGiftRepo(tx)
+
+	updated, err := repo.MarkOpened(context.Background(), util.RandomString(43))
+	require.NoError(t, err)
+	require.False(t, updated)
+}
+
 func TestGiftRepo_Create_DefaultsRevealConfig(t *testing.T) {
 	tx := dbtest.Tx(t)
 	user, err := NewUserRepo(tx).Create(context.Background(), util.RandomEmail())

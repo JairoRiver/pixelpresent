@@ -66,6 +66,10 @@ export default function RevealStage({
   const [phase, setPhase] = useState<Phase>('idle');
   const mechanicRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Guards the "reveal completed" signal so it fires exactly once per view, no
+  // matter how 'revealed' was reached (animation end, skip, timeout, reduced
+  // motion). This is what marks a single_open gift consumed on the server.
+  const openedSignalled = useRef(false);
 
   // Start the reveal from the idle screen. Under reduced motion we skip the
   // transition animation entirely and show the final drawing straight away.
@@ -98,6 +102,16 @@ export default function RevealStage({
       stop();
     };
   }, [phase, gift, mechanic]);
+
+  // Tell the server the reveal completed the first time the drawing is shown, so
+  // a single_open gift is marked opened and later visits get the "already opened"
+  // gate. Fire-and-forget: a failed signal must not break the reveal the
+  // recipient is already seeing. Requires a token (absent in previews).
+  useEffect(() => {
+    if (phase !== 'revealed' || !viewToken || openedSignalled.current) return;
+    openedSignalled.current = true;
+    fetch(`/api/g/${encodeURIComponent(viewToken)}/opened`, { method: 'POST' }).catch(() => {});
+  }, [phase, viewToken]);
 
   // Render the final drawing once revealed, at a higher resolution than the
   // animation (finalCellSize) so large grids stay crisp; CSS caps the display
