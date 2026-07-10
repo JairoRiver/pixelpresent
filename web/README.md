@@ -1,43 +1,36 @@
-# Astro Starter Kit: Minimal
+# Pixel Present — frontend (Astro)
 
-```sh
-pnpm create astro@latest -- --template minimal
+Frontend del proyecto: sitio **estático** con [Astro](https://astro.build), islas
+[Preact](https://preactjs.com) para la UI con estado (editor, dashboard, login,
+revelación) y [Tailwind 4](https://tailwindcss.com) para estilos. La lógica de
+canvas (render del editor, animaciones de revelación) vive en TS vanilla bajo
+`src/lib/`.
+
+El build (`dist/`) se **embebe en el binario Go** (`internal/web`), que en
+producción sirve los estáticos y la API JSON en el mismo origen — no hay un
+segundo proceso Node.
+
+## Desarrollo
+
+No arranques este paquete por separado: usa las tareas del repo raíz, que
+levantan backend + frontend juntos (el dev server de Astro proxea `/api` a la
+API Go). Ver [`../README.md`](../README.md).
+
+```bash
+task dev-front     # servidor de Astro en :4321 (proxy a la API en :8080)
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+El dev server corre en modo background (`astro dev --background`); gestiónalo con
+`astro dev stop|status|logs`. Notas para agentes en [`AGENTS.md`](AGENTS.md).
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
+## Estructura
 
 ```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+src/
+  pages/         Rutas (index, login, dashboard, editor, g/ = revelación)
+  components/    Islas Preact (Editor, DashboardGifts, RevealStage, ...)
+  lib/           Canvas y animaciones en TS vanilla (canvas, reveal, confetti)
+  layouts/       Layout base
+  styles/        Estilos globales / Tailwind
+public/          Assets estáticos
 ```
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
