@@ -3,6 +3,9 @@ pixel_present_arquitectura.md
 pixel_present_tareas.md
 pixel_present.md
 
+### Infra / deploy (VPS-specific, not product code) ###
+/deploy/
+
 ### Go ###
 /server
 /bin/

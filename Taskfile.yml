@@ -66,14 +66,10 @@ tasks:
 
   build:
     desc: >-
-      Build the frontend and compile the single Go binary with the static site
-      embedded. Output: bin/pixelpresent.
+      Production build: compile the frontend and the single static Go binary with
+      the site embedded (scripts/build.sh). Output: bin/pixelpresent.
     cmds:
-      - task: web-build
-      # Astro empties its outDir (internal/web/dist) on build, removing the
-      # tracked placeholder; restore it so the working tree stays clean.
-      - touch internal/web/dist/.gitkeep
-      - go build -o bin/pixelpresent ./cmd/server
+      - ./scripts/build.sh
 
   prod:
     desc: >-
